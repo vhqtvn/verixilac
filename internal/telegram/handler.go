@@ -214,7 +214,7 @@ func (h *Handler) onPlayerJoinRoom(r *game.Room, p *game.Player) {
 	h.broadcast(players, p.Name()+" vừa vào phòng "+r.ID(), false)
 }
 
-func (h *Handler) /onPlayerBet(g *game.Game, p *game.PlayerInGame) {
+func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
 	msg := "Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
 	dealer := g.Dealer()
 	h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, MakeDealerPrepareButtons(g)...)
