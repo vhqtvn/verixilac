@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/psucodervn/verixilac/internal/stats"
 	"github.com/rs/zerolog/log"
 	"go.uber.org/atomic"
 )
@@ -18,6 +19,8 @@ type Manager struct {
 	rooms         sync.Map
 	games         sync.Map
 	canCreateGame atomic.Bool
+
+	statsManager *stats.Manager
 
 	mu                   sync.RWMutex
 	onNewRoomFunc        OnNewRoomFunc
@@ -45,6 +48,7 @@ func NewManager(maxBet uint64, minDeal uint64, timeout time.Duration) *Manager {
 		minDeal:       *atomic.NewUint64(minDeal),
 		timeout:       *atomic.NewDuration(timeout),
 		canCreateGame: *atomic.NewBool(true),
+		statsManager:  stats.NewManager("data/stats.json"),
 	}
 	return m
 }
@@ -389,6 +393,10 @@ func (m *Manager) FinishGame(ctx context.Context, g *Game, force bool) error {
 	if f != nil {
 		f(g)
 	}
+
+	// Update statistics
+	go m.statsManager.Update(ctx, toStatsRoundData(g))
+
 	return nil
 }
 
@@ -450,4 +458,89 @@ func (m *Manager) Deposit(ctx context.Context, id string, amount int64) (*Player
 
 	p.AddBalance(amount)
 	return p, nil
+}
+
+func toStatsRoundData(g *Game) stats.RoundData {
+	rd := stats.RoundData{
+		Stats:   make([]stats.RoundPlayerResult, 0, len(g.Players())+1),
+		Matches: make([]stats.MatchResult, 0, len(g.Players())),
+	}
+
+	// Helper to determine hand type string
+	getHandType := func(pig *PlayerInGame) string {
+		t := pig.ResultType()
+		switch t {
+		case TypeDoubleBlackJack:
+			return "xiban"
+		case TypeBlackJack:
+			return "xilac"
+		case TypeHighFive:
+			return "ngulinh"
+		case TypeBusted:
+			return "chay"
+		case TypeNormal:
+			return "thuong"
+		default:
+			return "thuong"
+		}
+	}
+
+	// Dealer stats
+	dealer := g.Dealer()
+	dealerRes := stats.RoundPlayerResult{
+		PlayerID:  dealer.ID(),
+		Role:      "banker",
+		HandType:  getHandType(dealer),
+		Score:     dealer.Cards().Value(),
+		CardCount: len(dealer.Cards()),
+	}
+	if dealer.Reward() > 0 {
+		dealerRes.Result = "win"
+	} else if dealer.Reward() < 0 {
+		dealerRes.Result = "lose"
+	} else {
+		dealerRes.Result = "draw"
+	}
+	rd.Stats = append(rd.Stats, dealerRes)
+
+	// Players stats and matches
+	for _, p := range g.Players() {
+		pRes := stats.RoundPlayerResult{
+			PlayerID:  p.ID(),
+			Role:      "player",
+			HandType:  getHandType(p),
+			Score:     p.Cards().Value(),
+			CardCount: len(p.Cards()),
+		}
+		if p.Reward() > 0 {
+			pRes.Result = "win"
+		} else if p.Reward() < 0 {
+			pRes.Result = "lose"
+		} else {
+			pRes.Result = "draw"
+		}
+		rd.Stats = append(rd.Stats, pRes)
+
+		// Match result (Dealer vs Player)
+		match := stats.MatchResult{
+			Player1ID: dealer.ID(),
+			Player2ID: p.ID(),
+		}
+		// Compare returns result from perspective of first arg (dealer)
+		cmp := Compare(dealer, p)
+		if cmp == Win {
+			match.Result = "p1_win"
+		} else if cmp == Lose {
+			match.Result = "p2_win"
+		} else {
+			match.Result = "draw"
+		}
+		rd.Matches = append(rd.Matches, match)
+	}
+
+	return rd
+}
+
+func (m *Manager) StatsManager() *stats.Manager {
+	return m.statsManager
 }

@@ -214,7 +214,7 @@ func (h *Handler) onPlayerJoinRoom(r *game.Room, p *game.Player) {
 	h.broadcast(players, p.Name()+" vừa vào phòng "+r.ID(), false)
 }
 
-func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
+func (h *Handler) /onPlayerBet(g *game.Game, p *game.PlayerInGame) {
 	msg := "Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
 	dealer := g.Dealer()
 	h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, MakeDealerPrepareButtons(g)...)
@@ -385,7 +385,7 @@ func (h *Handler) doCompare(m *telebot.Message, onQuery bool) {
 		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d☘️", reward)
 	} else {
 		msgDealer += fmt.Sprintf("\n%s và cái hoà nhau", to.Name())
-		msgPlayer = fmt.Sprintf("🤝 Cái lật bài bạn và hoà. Bạn không bị mất tiền")
+		msgPlayer = "🤝 Cái lật bài bạn và hoà. Bạn không bị mất tiền"
 	}
 	msgPlayer += fmt.Sprintf("\nBài của cái: %s",
 		dealer.Cards().String(false, true),

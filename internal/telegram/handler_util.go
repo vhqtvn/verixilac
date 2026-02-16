@@ -253,18 +253,18 @@ func (h *Handler) editMessage(m *telebot.Message, msg string, buttons ...InlineB
 
 func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, buttons ...InlineButton) {
 	var recvs []*game.Player
-	switch receivers.(type) {
+	switch v := receivers.(type) {
 	case []*game.Player:
-		recvs = receivers.([]*game.Player)
+		recvs = v
 	case *game.Player:
-		recvs = append(recvs, receivers.(*game.Player))
+		recvs = append(recvs, v)
 	case []*game.PlayerInGame:
-		tmp := receivers.([]*game.PlayerInGame)
+		tmp := v
 		for i := range tmp {
 			recvs = append(recvs, tmp[i].Player)
 		}
 	case *game.PlayerInGame:
-		recvs = append(recvs, receivers.(*game.PlayerInGame).Player)
+		recvs = append(recvs, v.Player)
 	default:
 		log.Error().Str("type", reflect.TypeOf(receivers).String()).Msg("invalid receivers type")
 		return

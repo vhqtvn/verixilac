@@ -63,6 +63,10 @@ var (
 			Text:        "icon",
 			Description: "Thay đổi icon. Cú pháp: /seticon icon",
 		},
+		{
+			Text:        "stats",
+			Description: "Xem thống kê. Cú pháp: /stats [tên người chơi]",
+		},
 	}
 )
 
@@ -99,6 +103,7 @@ func (h *Handler) Setup() error {
 	h.bot.Handle("/setrule", h.CmdSetRule)
 	h.bot.Handle("/admin", h.CmdAdmin)
 	h.bot.Handle("/seticon", h.CmdSetIcon)
+	h.bot.Handle("/stats", h.CmdStats)
 
 	h.bot.Handle(telebot.OnQuery, func(q *telebot.Query) {
 		log.Info().Interface("q", q).Msg("on query")
@@ -287,4 +292,79 @@ func (h *Handler) CmdSetIcon(m *telebot.Message) {
 	p.SetIcon(icon)
 	_ = h.game.SaveToStorage()
 	h.sendMessage(m.Chat, "Đã thay đổi icon của bạn thành: "+icon)
+}
+
+func (h *Handler) CmdStats(m *telebot.Message) {
+	p := h.joinServer(m)
+	args := strings.TrimSpace(m.Payload)
+
+	// Check for pairwise syntax
+	var p1Name, p2Name string
+	if strings.Contains(args, "/") {
+		parts := strings.SplitN(args, "/", 2)
+		p1Name, p2Name = strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	} else if strings.Contains(args, "-") {
+		parts := strings.SplitN(args, "-", 2)
+		p1Name, p2Name = strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	}
+
+	if p1Name != "" && p2Name != "" {
+		// Pairwise lookup
+		p1 := h.findPlayerByName(p1Name)
+		p2 := h.findPlayerByName(p2Name)
+		if p1 == nil {
+			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+p1Name)
+			return
+		}
+		if p2 == nil {
+			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+p2Name)
+			return
+		}
+
+		// Ensure we pass IDs in correct order to match what GetPairwise does internally?
+		// No, GetPairwise sorts them internally.
+		// BUT PairwiseStat struct has Player1ID and Player2ID fixed as sorted.
+		// We need to know which one corresponds to p1 and p2 variables here to print correct names.
+
+		stats := h.game.StatsManager().GetPairwiseStats(p1.ID(), p2.ID())
+
+		// Map names to the sorted IDs in the stats struct
+		name1 := p1.Name()
+		name2 := p2.Name()
+		if p1.ID() > p2.ID() {
+			name1, name2 = name2, name1
+		}
+
+		h.sendMessage(m.Chat, stats.String(name1, name2))
+		return
+	}
+
+	// Single player lookup
+	target := p
+	if len(args) > 0 {
+		found := h.findPlayerByName(args)
+		if found == nil {
+			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+args)
+			return
+		}
+		target = found
+	}
+
+	stats := h.game.StatsManager().GetPlayerStats(target.ID())
+	h.sendMessage(m.Chat, stats.String())
+}
+
+func (h *Handler) findPlayerByName(name string) *game.Player {
+	for _, pl := range h.game.Players() {
+		if pl.Name() == name || pl.ID() == name {
+			return pl
+		}
+	}
+	lowerName := strings.ToLower(name)
+	for _, pl := range h.game.Players() {
+		if strings.ToLower(pl.Name()) == lowerName {
+			return pl
+		}
+	}
+	return nil
 }
