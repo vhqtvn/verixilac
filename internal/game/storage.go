@@ -61,6 +61,10 @@ func (m *Manager) LoadFromStorage() error {
 		}
 	}
 
+	if err := m.statsManager.Load(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
