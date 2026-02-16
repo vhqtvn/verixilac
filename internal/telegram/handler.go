@@ -21,18 +21,29 @@ type Handler struct {
 	gameMessages sync.Map
 	dealMessages sync.Map
 
+	chatWorkers      sync.Map
+	sendQueue        chan *botRequest
+	callbackAckQueue chan *telebot.Callback
+
+	editLatest sync.Map // editKey -> *botRequest for dedup
+
 	mu sync.RWMutex
 }
 
 func NewHandler(manager *game.Manager, bot *telebot.Bot) *Handler {
-	return &Handler{
-		game: manager,
-		bot:  bot,
+	h := &Handler{
+		game:             manager,
+		bot:              bot,
+		sendQueue:        make(chan *botRequest, sendQueueSize),
+		callbackAckQueue: make(chan *telebot.Callback, callbackQueueSize),
 	}
+	h.startQueue()
+	return h
 }
 
 func (h *Handler) onCallback(q *telebot.Callback) {
-	// log.Info().Interface("data", q.Data).Interface("text", q.Message.Text).Msg("on callback")
+	h.callbackAckQueue <- q
+
 	ar := strings.SplitN(q.Data, " ", 2)
 	if len(ar) > 1 {
 		q.Message.Payload = ar[1]
@@ -80,10 +91,6 @@ func (h *Handler) doBet(m *telebot.Message, onQuery bool) {
 	}
 
 	amount := cast.ToUint64(ar[1])
-	if amount < 0 {
-		h.sendMessage(m.Chat, "Số tiền cược không hợp lệ")
-		return
-	}
 	if err := h.game.PlayerBet(ctx, g, p, amount); err != nil {
 		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
 		return
@@ -125,7 +132,7 @@ func (h *Handler) doDeal(m *telebot.Message, onQuery bool) {
 			if !pg.IsDone() {
 				continue
 			}
-			msg := fmt.Sprintf("Bài của %s: %s\n%s đã thắng %dk",
+			msg := fmt.Sprintf("Bài của %s: %s\n%s đã thắng %d☘️",
 				pg.Name(), pg.Cards().String(false, false),
 				pg.Name(), pg.Reward())
 			h.broadcast(g.AllPlayers(), msg, false)
@@ -265,7 +272,7 @@ func (h *Handler) doEndGame(m *telebot.Message, onQuery bool) bool {
 		return false
 	}
 	if onQuery {
-		_, _ = h.bot.EditReplyMarkup(m, nil)
+		h.botEditReplyMarkup(m, nil)
 	}
 	return true
 }
@@ -283,7 +290,7 @@ func (h *Handler) doStand(m *telebot.Message, onQuery bool) bool {
 		return false
 	}
 	if onQuery {
-		_, _ = h.bot.EditReplyMarkup(m, nil)
+		h.botEditReplyMarkup(m, nil)
 	}
 	return true
 }
@@ -371,11 +378,11 @@ func (h *Handler) doCompare(m *telebot.Message, onQuery bool) {
 
 	var msgPlayer string
 	if reward < 0 {
-		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %dk", to.Name(), -reward)
-		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %dk", -reward)
+		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %d☘️", to.Name(), -reward)
+		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %d☘️", -reward)
 	} else if reward > 0 {
-		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %dk", to.Name(), reward)
-		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %dk", reward)
+		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %d☘️", to.Name(), reward)
+		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d☘️", reward)
 	} else {
 		msgDealer += fmt.Sprintf("\n%s và cái hoà nhau", to.Name())
 		msgPlayer = fmt.Sprintf("🤝 Cái lật bài bạn và hoà. Bạn không bị mất tiền")
@@ -413,19 +420,7 @@ func (h *Handler) onPlayerPlay(g *game.Game, pg *game.PlayerInGame) {
 }
 
 func (h *Handler) sendChat(receivers []*game.Player, msg string) {
-	wg := sync.WaitGroup{}
 	for _, p := range receivers {
-		wg.Add(1)
-		p := p
-
-		go func() {
-			defer wg.Done()
-			_, err := h.bot.Send(ToTelebotChat(p.ID()), msg)
-			if err != nil {
-				log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
-			}
-		}()
+		h.botSend(ToTelebotChat(p.ID()), msg, nil)
 	}
-
-	wg.Wait()
 }

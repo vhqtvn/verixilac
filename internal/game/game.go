@@ -130,9 +130,6 @@ func (g *Game) PlayerBet(p *Player, betAmount uint64) (*PlayerInGame, error) {
 		return nil, ErrGameAlreadyStarted
 	}
 
-	if p.Balance() < int64(betAmount) {
-		return nil, fmt.Errorf("bạn không đủ tiền để bet %dk", betAmount)
-	}
 	if betAmount > g.maxBet.Load() {
 		return nil, fmt.Errorf("bạn chỉ được bet tối đa %dk", g.maxBet.Load())
 	}
@@ -164,7 +161,7 @@ func (g *Game) PreparingBoard() string {
 		bf.WriteString("\n(chưa có ai)")
 	} else {
 		for _, p := range g.players {
-			bf.WriteString(fmt.Sprintf("\n  - %s: %dk", p.Name(), p.BetAmount()))
+			bf.WriteString(fmt.Sprintf("\n  - %s: %d☘️", p.Name(), p.BetAmount()))
 		}
 	}
 	return bf.String()
@@ -208,10 +205,10 @@ func (g *Game) ResultBoard() string {
 		bf.WriteString(fmt.Sprintf("\n  - %s: %s", p.Name(), p.Cards().String(false, false)))
 	}
 
-	bf.WriteString(fmt.Sprintf("\n\nTiền thưởng:\n\nNhà cái (%s): %+dk (%+dk)\n", g.dealer.Name(), g.dealer.Reward(), g.dealer.Balance()))
+	bf.WriteString(fmt.Sprintf("\n\nTiền thưởng:\n\nNhà cái (%s): %+d☘️ (%+d☘️)\n", g.dealer.Name(), g.dealer.Reward(), g.dealer.Balance()))
 	bf.WriteString(fmt.Sprintf("Người chơi:"))
 	for _, p := range g.players {
-		bf.WriteString(fmt.Sprintf("\n  - %s: %+dk (%+dk)", p.Name(), p.Reward(), p.Balance()))
+		bf.WriteString(fmt.Sprintf("\n  - %s: %+d☘️ (%+d☘️)", p.Name(), p.Reward(), p.Balance()))
 	}
 	return bf.String()
 }

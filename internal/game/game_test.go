@@ -70,10 +70,10 @@ func TestGetReward(t *testing.T) {
 		{args: args{aIds: []int{1, 2}, bIds: []int{0, 5, 9}}, want: -1},
 		{args: args{aIds: []int{9, 5}, bIds: []int{0, 5, 7}}, want: 1},
 		{args: args{aIds: []int{7, 8}, bIds: []int{0, 5, 7}}, want: 1},
-		{args: args{aIds: []int{7, 8}, bIds: []int{0, 13}}, want: -2},
+		{args: args{aIds: []int{7, 8}, bIds: []int{0, 13}}, want: -3},
 		{args: args{aIds: []int{7, 8}, bIds: []int{0, 13}, ruleID: "2"}, want: -3},
 		{args: args{aIds: []int{0, 13}, bIds: []int{26, 39}}, want: 0},
-		{args: args{aIds: []int{0, 13}, bIds: []int{1, 2}}, want: 1},
+		{args: args{aIds: []int{0, 13}, bIds: []int{1, 2}}, want: 3},
 		{args: args{aIds: []int{0, 13}, bIds: []int{1, 2}, ruleID: "2"}, want: 3},
 		{args: args{aIds: []int{0, 10}, bIds: []int{1, 2}, ruleID: "2"}, want: 2},
 	}

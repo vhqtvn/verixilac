@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -221,9 +220,6 @@ func (m *Manager) NewGame(room *Room, dealer *Player) (*Game, error) {
 	}
 	if !m.canCreateGame.Load() {
 		return nil, ErrServerMaintenance
-	}
-	if dealer.Balance() < int64(m.minDeal.Load()) {
-		return nil, fmt.Errorf("kiếm thêm tiền đi bạn ơi, tối thiểu %dk", m.minDeal.Load())
 	}
 
 	g := NewGame(dealer, room, dealer.Rule(), m.maxBet.Load(), m.timeout.Load())

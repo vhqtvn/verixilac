@@ -14,7 +14,7 @@ type Rule struct {
 }
 
 var (
-	DefaultRuleID = "1"
+	DefaultRuleID = "2"
 	DefaultRules  = map[string]Rule{
 		"1": {
 			ID:          "1",

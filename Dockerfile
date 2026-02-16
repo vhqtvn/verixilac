@@ -1,7 +1,7 @@
 ARG BINARY=verixilac
 ARG DIR=/app
 
-FROM golang:1.18-alpine AS builder
+FROM golang:1.26-alpine AS builder
 ARG BINARY
 ARG DIR
 

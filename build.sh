@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-TAG="v$(date -u +"%Y%m%d")-$(git rev-parse --short HEAD)"
+# TAG="v$(date -u +"%Y%m%d")-$(git rev-parse --short HEAD)"
+TAG=latest
 export TAG
 
 export SERVICE=$1
@@ -14,11 +15,8 @@ export IMAGE
 echo "Build ${IMAGE}"
 
 docker build -t "${IMAGE}" -f ./Dockerfile .
-docker push "${IMAGE}"
 
-#docker-compose -f dc-build.yaml build ${SERVICE}
-#docker-compose -f dc-build.yaml push ${SERVICE}
-
-./up.sh "${TAG}"
+# export the image to deploy/image.tar.gz
+docker save "${IMAGE}" | gzip > deploy/image.tar.gz
 
 exit 0

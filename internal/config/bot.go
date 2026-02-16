@@ -12,5 +12,9 @@ type BotConfig struct {
 }
 
 type TelegramConfig struct {
-	BotToken string `split_words:"true" required:"true"`
+	BotToken          string `split_words:"true" required:"true"`
+	BotPublicUrl      string `split_words:"true"` // TELEGRAM_BOT_PUBLIC_URL
+	BotIngressUrl     string `split_words:"true"` // TELEGRAM_BOT_INGRESS_URL
+	BotIngressAppName string `split_words:"true"` // TELEGRAM_BOT_INGRESS_APP_NAME
+	BotIngressToken   string `split_words:"true"` // TELEGRAM_BOT_INGRESS_TOKEN
 }

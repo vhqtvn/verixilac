@@ -66,18 +66,12 @@ var (
 	}
 )
 
-func (h *Handler) Start() (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("recover: %v", r)
-		}
-	}()
-
-	if err = h.bot.SetCommands(commands); err != nil {
-		return
+func (h *Handler) Setup() error {
+	if err := h.bot.SetCommands(commands); err != nil {
+		return err
 	}
 
-	if err = h.game.LoadFromStorage(); err != nil {
+	if err := h.game.LoadFromStorage(); err != nil {
 		log.Err(err).Msg("load data failed")
 	}
 
@@ -125,6 +119,20 @@ func (h *Handler) Start() (err error) {
 		}
 	})
 
+	return nil
+}
+
+func (h *Handler) Start() (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("recover: %v", r)
+		}
+	}()
+
+	if err = h.Setup(); err != nil {
+		return
+	}
+
 	h.bot.Start()
 	return
 }
@@ -156,7 +164,7 @@ func (h *Handler) CmdStatus(m *telebot.Message) {
 	msg := fmt.Sprintf(`Thông tin của bạn:
 - ID: %s
 - Name: %s
-- Balance: %dk
+- Balance: %d☘️
 - Rule: %s (%s)
 `, p.ID(), p.Name(), p.Balance(), r.ID, r.Name)
 	h.sendMessage(m.Chat, msg)
@@ -247,7 +255,7 @@ func (h *Handler) CmdListRoom(m *telebot.Message) {
 	for _, r := range rooms {
 		bf.WriteString(fmt.Sprintf("Phòng %s:\n", r.ID()))
 		for _, p := range r.Players() {
-			bf.WriteString(fmt.Sprintf(" - %s (%+dk)\n", p.Name(), p.Balance()))
+			bf.WriteString(fmt.Sprintf(" - %s (%+d☘️)\n", p.Name(), p.Balance()))
 		}
 	}
 	h.sendMessage(m.Chat, bf.String())

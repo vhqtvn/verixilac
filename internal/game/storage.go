@@ -2,7 +2,7 @@ package game
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 )
 
 const (
@@ -28,7 +28,7 @@ type (
 )
 
 func (m *Manager) LoadFromStorage() error {
-	b, err := ioutil.ReadFile(storageFile)
+	b, err := os.ReadFile(storageFile)
 	if err != nil {
 		return err
 	}
@@ -97,5 +97,5 @@ func (m *Manager) SaveToStorage() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(storageFile, b, 0666)
+	return os.WriteFile(storageFile, b, 0666)
 }

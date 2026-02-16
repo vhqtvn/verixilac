@@ -111,7 +111,7 @@ func (r *Room) Info() string {
 	bf.WriteString("Phòng hiện tại: " + r.id)
 	bf.WriteString("\nThành viên:\n")
 	for _, p := range ps {
-		bf.WriteString(fmt.Sprintf(" - %s: %+dk\n", p.Name(), p.Balance()))
+		bf.WriteString(fmt.Sprintf(" - %s: %+d☘️\n", p.Name(), p.Balance()))
 	}
 	return bf.String()
 }

@@ -1,3 +1,8 @@
 #!/usr/bin/env bash
 
-docker-compose up -d
+docker load -i image.tar.gz
+
+docker stop verixilac-bot
+docker rm verixilac-bot
+
+docker run -d --name verixilac-bot -v $(pwd)/data:/data/ --env-file=.env psucoder/verixilac:latest bot
