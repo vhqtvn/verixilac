@@ -221,7 +221,7 @@ func (g *Game) ResultBoard() string {
 	bf.WriteString("*Người chơi*:")
 	for _, p := range g.players {
 		pReward := p.Reward()
-		pIcon := "😐"
+		pIcon := " "
 		if pReward > 0 {
 			pIcon = "🤑"
 		} else if pReward < 0 {

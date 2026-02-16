@@ -493,6 +493,7 @@ func toStatsRoundData(g *Game) stats.RoundData {
 		HandType:  getHandType(dealer),
 		Score:     dealer.Cards().Value(),
 		CardCount: len(dealer.Cards()),
+		Amount:    dealer.Reward(),
 	}
 	if dealer.Reward() > 0 {
 		dealerRes.Result = "win"
@@ -511,6 +512,7 @@ func toStatsRoundData(g *Game) stats.RoundData {
 			HandType:  getHandType(p),
 			Score:     p.Cards().Value(),
 			CardCount: len(p.Cards()),
+			Amount:    p.Reward(),
 		}
 		if p.Reward() > 0 {
 			pRes.Result = "win"

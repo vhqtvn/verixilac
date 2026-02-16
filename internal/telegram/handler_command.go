@@ -134,6 +134,11 @@ func (h *Handler) Setup() error {
 		}
 	})
 
+	h.bot.Handle(telebot.OnSticker, h.onMedia)
+	h.bot.Handle(telebot.OnPhoto, h.onMedia)
+	h.bot.Handle(telebot.OnVideo, h.onMedia)
+	h.bot.Handle(telebot.OnAnimation, h.onMedia)
+
 	return nil
 }
 
@@ -292,6 +297,12 @@ func (h *Handler) CmdPass(m *telebot.Message) {
 func (h *Handler) CmdSetIcon(m *telebot.Message) {
 	p := h.joinServer(m)
 	icon := strings.TrimSpace(m.Payload)
+	if len(icon) == 0 {
+		p.SetIcon("")
+		_ = h.game.SaveToStorage()
+		h.sendMessage(m.Chat, "Đã xóa icon của bạn")
+		return
+	}
 	gr := uniseg.NewGraphemes(icon)
 	count := 0
 	for gr.Next() {
@@ -430,5 +441,54 @@ func (h *Handler) CmdTransfer(m *telebot.Message) {
 		if err == nil {
 			h.sendMessage(&telebot.Chat{ID: targetChatID}, fmt.Sprintf("Bạn vừa nhận được %d🍂 từ %s.", amount, p.IconName()))
 		}
+	}
+}
+
+func (h *Handler) onMedia(m *telebot.Message) {
+	p := h.joinServer(m)
+	r := p.CurrentRoom()
+	if r == nil {
+		return
+	}
+
+	var what interface{}
+	// Determine what to send
+	if m.Sticker != nil {
+		what = m.Sticker
+	} else if m.Photo != nil {
+		what = m.Photo
+	} else if m.Video != nil {
+		what = m.Video
+	} else if m.Animation != nil {
+		what = m.Animation
+	} else {
+		return
+	}
+
+	ps := FilterPlayers(r.Players(), p.ID())
+	icon := "🗣"
+	if len(p.Icon()) > 0 {
+		icon = p.Icon()
+	}
+
+	if m.Sticker != nil {
+		h.sendChat(ps, icon+" "+p.Name()+" đã gửi một sticker:")
+		h.sendMedia(ps, m.Sticker, nil)
+	} else {
+		caption := icon + " " + p.Name()
+		if m.Caption != "" {
+			caption += ": " + m.Caption
+		}
+
+		switch v := what.(type) {
+		case *telebot.Photo:
+			v.Caption = caption
+		case *telebot.Video:
+			v.Caption = caption
+		case *telebot.Animation:
+			v.Caption = caption
+		}
+
+		h.sendMedia(ps, what, nil)
 	}
 }

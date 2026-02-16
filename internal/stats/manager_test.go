@@ -24,6 +24,7 @@ func TestManager_Update(t *testing.T) {
 				HandType:  "xilac",
 				Score:     21,
 				CardCount: 2,
+				Amount:    300,
 			},
 			{
 				PlayerID:  "p1",
@@ -32,6 +33,7 @@ func TestManager_Update(t *testing.T) {
 				HandType:  "thuong",
 				Score:     18,
 				CardCount: 2,
+				Amount:    -300,
 			},
 		},
 		Matches: []MatchResult{
@@ -56,15 +58,19 @@ func TestManager_Update(t *testing.T) {
 	dStats := m.GetPlayerStats("dealer").Banker
 	assert.Equal(t, int64(1), dStats.TotalGames)
 	assert.Equal(t, int64(1), dStats.Wins)
+	assert.Equal(t, int64(300), dStats.TotalMoney)
 	assert.Equal(t, int64(1), dStats.GetHandTypeStat("xilac").Occurrences)
 	assert.Equal(t, int64(1), dStats.GetHandTypeStat("xilac").Wins)
+	assert.Equal(t, int64(300), dStats.GetHandTypeStat("xilac").TotalMoney)
 
 	// Verify P1 Stats
 	p1Stats := m.GetPlayerStats("p1").Player
 	assert.Equal(t, int64(1), p1Stats.TotalGames)
 	assert.Equal(t, int64(1), p1Stats.Losses)
+	assert.Equal(t, int64(-300), p1Stats.TotalMoney)
 	assert.Equal(t, int64(1), p1Stats.GetScoreStat(18).Occurrences)
 	assert.Equal(t, int64(1), p1Stats.GetScoreStat(18).Losses)
+	assert.Equal(t, int64(-300), p1Stats.GetScoreStat(18).TotalMoney)
 
 	// Verify Pairwise
 	pw := m.Data.GetPairwise("dealer", "p1")

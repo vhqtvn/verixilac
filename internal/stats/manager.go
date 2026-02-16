@@ -122,9 +122,10 @@ func (m *Manager) Update(ctx context.Context, data RoundData) {
 		}
 
 		// Update Detail Stats
-		roleStats.GetHandTypeStat(pRes.HandType).Add(pRes.Result)
-		roleStats.GetScoreStat(pRes.Score).Add(pRes.Result)
-		roleStats.GetCardCountStat(pRes.CardCount).Add(pRes.Result)
+		roleStats.TotalMoney += pRes.Amount
+		roleStats.GetHandTypeStat(pRes.HandType).Add(pRes.Result, pRes.Amount)
+		roleStats.GetScoreStat(pRes.Score).Add(pRes.Result, pRes.Amount)
+		roleStats.GetCardCountStat(pRes.CardCount).Add(pRes.Result, pRes.Amount)
 	}
 
 	// Update Pairwise Stats

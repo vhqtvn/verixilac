@@ -438,3 +438,9 @@ func (h *Handler) sendChat(receivers []*game.Player, msg string) {
 		h.botSend(ToTelebotChat(p.ID()), msg, nil)
 	}
 }
+
+func (h *Handler) sendMedia(receivers []*game.Player, what interface{}, options *telebot.SendOptions) {
+	for _, p := range receivers {
+		h.botSend(ToTelebotChat(p.ID()), what, options)
+	}
+}

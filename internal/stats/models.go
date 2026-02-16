@@ -27,11 +27,13 @@ type (
 	}
 
 	// RoleStats stores statistics for a specific role (Banker or Player)
+	// RoleStats stores statistics for a specific role (Banker or Player)
 	RoleStats struct {
 		TotalGames int64 `json:"totalGames"`
 		Wins       int64 `json:"wins"`
 		Losses     int64 `json:"losses"`
 		Draws      int64 `json:"draws"`
+		TotalMoney int64 `json:"totalMoney"`
 
 		// HandTypeStats counts occurrences of specific hand types
 		// Keys: "xilac", "xiban", "ngulinh", "chay", "thuong"
@@ -52,6 +54,7 @@ type (
 		Wins        int64 `json:"wins"`
 		Losses      int64 `json:"losses"`
 		Draws       int64 `json:"draws"`
+		TotalMoney  int64 `json:"totalMoney"`
 	}
 
 	// PlayerStats aggregates all stats for a single player
@@ -73,6 +76,7 @@ type (
 		PlayerID string
 		Role     string // "banker", "player"
 		Result   string // "win", "lose", "draw"
+		Amount   int64  // Positive for win, negative for lose
 
 		HandType  string // "xilac", "xiban", "ngulinh", "chay", "thuong"
 		Score     int
@@ -115,8 +119,9 @@ func NewRoleStats() *RoleStats {
 	}
 }
 
-func (s *DetailStat) Add(result string) {
+func (s *DetailStat) Add(result string, amount int64) {
 	s.Occurrences++
+	s.TotalMoney += amount
 	switch result {
 	case "win":
 		s.Wins++
@@ -186,6 +191,7 @@ func (r *RoleStats) String() string {
 		winRate = float64(r.Wins) / float64(r.TotalGames) * 100
 	}
 	sb.WriteString(fmt.Sprintf("  - Tổng ván: %d (Thắng: %d | Thua: %d | Hoà: %d)\n", r.TotalGames, r.Wins, r.Losses, r.Draws))
+	sb.WriteString(fmt.Sprintf("  - Tổng tiền: %+d🍂\n", r.TotalMoney))
 	sb.WriteString(fmt.Sprintf("  - Tỷ lệ thắng: %.2f%%\n", winRate))
 
 	// Top interesting stats could go here, e.g. "Xì lác: 5, Ngũ linh: 1"
@@ -195,16 +201,34 @@ func (r *RoleStats) String() string {
 	}
 	sort.Strings(keys)
 
-	sb.WriteString("  - Bài đặc biệt:\n")
+	sb.WriteString("  - Chi tiết bài:\n")
 	hasSpecial := false
 	for _, k := range keys {
 		s := r.HandTypeStats[k]
-		if s.Occurrences > 0 && k != "thuong" { // "thuong" is normal hand
-			sb.WriteString(fmt.Sprintf("    + %s: %d\n", k, s.Occurrences))
+		if s.Occurrences > 0 {
+			sb.WriteString(fmt.Sprintf("    + %s: %d (%+d🍂)\n", k, s.Occurrences, s.TotalMoney))
 			hasSpecial = true
 		}
 	}
 	if !hasSpecial {
+		sb.WriteString("    (Chưa có)\n")
+	}
+
+	sb.WriteString("  - Số lượng lá:\n")
+	cardKeys := make([]string, 0, len(r.CardCountStats))
+	for k := range r.CardCountStats {
+		cardKeys = append(cardKeys, k)
+	}
+	sort.Strings(cardKeys)
+	hasCards := false
+	for _, k := range cardKeys {
+		s := r.CardCountStats[k]
+		if s.Occurrences > 0 {
+			sb.WriteString(fmt.Sprintf("    + %s lá: %d (%+d🍂)\n", k, s.Occurrences, s.TotalMoney))
+			hasCards = true
+		}
+	}
+	if !hasCards {
 		sb.WriteString("    (Chưa có)\n")
 	}
 

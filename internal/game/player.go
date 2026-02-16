@@ -97,9 +97,6 @@ func (p *Player) SetRule(ruleID string) {
 }
 
 func (p *Player) SetIcon(icon string) {
-	if len(icon) == 0 {
-		return
-	}
 	p.icon = icon
 }
 

@@ -28,7 +28,7 @@ type botRequest struct {
 	reqType botRequestType
 	chat    *telebot.Chat        // for Send
 	message *telebot.Message     // for Edit / EditMarkup
-	text    string               // message text
+	what    interface{}          // message text or media
 	options *telebot.SendOptions // send/edit options
 	markup  *telebot.ReplyMarkup // for EditMarkup only
 	editKey string               // dedup key for edits (empty = no dedup)
@@ -85,16 +85,16 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 			switch req.reqType {
 			case botRequestSend:
 				if req.options != nil {
-					m, err = h.bot.Send(req.chat, req.text, req.options)
+					m, err = h.bot.Send(req.chat, req.what, req.options)
 				} else {
-					m, err = h.bot.Send(req.chat, req.text)
+					m, err = h.bot.Send(req.chat, req.what)
 				}
 
 			case botRequestEdit:
 				if req.options != nil {
-					m, err = h.bot.Edit(req.message, req.text, req.options)
+					m, err = h.bot.Edit(req.message, req.what, req.options)
 				} else {
-					m, err = h.bot.Edit(req.message, req.text)
+					m, err = h.bot.Edit(req.message, req.what)
 				}
 
 			case botRequestEditMarkup:
@@ -104,7 +104,7 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 			}
 
 			if err != nil {
-				log.Err(err).Str("text", req.text).Int("type", int(req.reqType)).Msg("bot request failed")
+				log.Err(err).Interface("what", req.what).Int("type", int(req.reqType)).Msg("bot request failed")
 				time.Sleep(1 * time.Second)
 			} else {
 				break
@@ -159,22 +159,22 @@ func (h *Handler) startQueue() {
 // --- Fire-and-forget API ---
 
 // botSend enqueues a send request and returns immediately.
-func (h *Handler) botSend(chat *telebot.Chat, text string, options *telebot.SendOptions) {
+func (h *Handler) botSend(chat *telebot.Chat, what interface{}, options *telebot.SendOptions) {
 	h.sendQueue <- &botRequest{
 		reqType: botRequestSend,
 		chat:    chat,
-		text:    text,
+		what:    what,
 		options: options,
 	}
 }
 
 // botEdit enqueues an edit request with deduplication key. Fire-and-forget.
 // If editKey is non-empty, only the latest enqueued edit for that key will execute.
-func (h *Handler) botEdit(editKey string, m *telebot.Message, text string, options *telebot.SendOptions) {
+func (h *Handler) botEdit(editKey string, m *telebot.Message, what interface{}, options *telebot.SendOptions) {
 	req := &botRequest{
 		reqType: botRequestEdit,
 		message: m,
-		text:    text,
+		what:    what,
 		options: options,
 		editKey: editKey,
 	}
@@ -196,12 +196,12 @@ func (h *Handler) botEditReplyMarkup(m *telebot.Message, markup *telebot.ReplyMa
 // --- Sync API (blocks until result) ---
 
 // botSendSync enqueues a send and waits for the result.
-func (h *Handler) botSendSync(chat *telebot.Chat, text string, options *telebot.SendOptions) (*telebot.Message, error) {
+func (h *Handler) botSendSync(chat *telebot.Chat, what interface{}, options *telebot.SendOptions) (*telebot.Message, error) {
 	ch := make(chan botResponse, 1)
 	h.sendQueue <- &botRequest{
 		reqType: botRequestSend,
 		chat:    chat,
-		text:    text,
+		what:    what,
 		options: options,
 		result:  ch,
 	}
@@ -210,12 +210,12 @@ func (h *Handler) botSendSync(chat *telebot.Chat, text string, options *telebot.
 }
 
 // botEditSync enqueues an edit and waits for the result.
-func (h *Handler) botEditSync(editKey string, m *telebot.Message, text string, options *telebot.SendOptions) (*telebot.Message, error) {
+func (h *Handler) botEditSync(editKey string, m *telebot.Message, what interface{}, options *telebot.SendOptions) (*telebot.Message, error) {
 	ch := make(chan botResponse, 1)
 	req := &botRequest{
 		reqType: botRequestEdit,
 		message: m,
-		text:    text,
+		what:    what,
 		options: options,
 		editKey: editKey,
 		result:  ch,
