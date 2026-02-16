@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog/log"
 	"gopkg.in/tucnak/telebot.v2"
@@ -169,9 +170,9 @@ func (h *Handler) CmdStatus(m *telebot.Message) {
 	msg := fmt.Sprintf(`Thông tin của bạn:
 - ID: %s
 - Name: %s
-- Balance: %d☘️
+- Balance: %d🍁
 - Rule: %s (%s)
-`, p.ID(), p.Name(), p.Balance(), r.ID, r.Name)
+`, p.ID(), p.IconName(), p.Balance(), r.ID, r.Name)
 	h.sendMessage(m.Chat, msg)
 }
 
@@ -257,7 +258,7 @@ func (h *Handler) CmdListRoom(m *telebot.Message) {
 	for _, r := range rooms {
 		bf.WriteString(fmt.Sprintf("Phòng %s:\n", r.ID()))
 		for _, p := range r.Players() {
-			bf.WriteString(fmt.Sprintf(" - %s (%+d☘️)\n", p.Name(), p.Balance()))
+			bf.WriteString(fmt.Sprintf(" - %s (%+d🍁)\n", p.IconName(), p.Balance()))
 		}
 	}
 	h.sendMessage(m.Chat, bf.String())
@@ -276,14 +277,14 @@ func (h *Handler) CmdPass(m *telebot.Message) {
 		return
 	}
 	// h.broadcast(g.AllPlayers(), pg.Name() + " đã bị qua lượt", false)
-	log.Info().Str("game_id", g.ID()).Str("user_id", pg.ID()).Msg(pg.Name() + " đã bị qua lượt")
+	log.Info().Str("game_id", g.ID()).Str("user_id", pg.ID()).Msg(pg.IconName() + " đã bị qua lượt")
 }
 
 func (h *Handler) CmdSetIcon(m *telebot.Message) {
 	p := h.joinServer(m)
 	icon := strings.TrimSpace(m.Payload)
-	if len(icon) != 1 {
-		h.sendMessage(m.Chat, "Cú pháp: /seticon icon. Icon chỉ được phép là 1 ký tự")
+	if utf8.RuneCountInString(icon) != 1 || len(icon) == 1 {
+		h.sendMessage(m.Chat, fmt.Sprintf("Cú pháp: /seticon icon. Icon chỉ được phép là 1 ký tự Unicode, bạn đã gửi %d kí tự dài %d bytes (`%s`)", utf8.RuneCountInString(icon), len(icon), icon))
 		return
 	}
 	p.SetIcon(icon)

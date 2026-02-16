@@ -39,7 +39,7 @@ func (h *Handler) doAdminPause(m *telebot.Message) {
 		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
 		return
 	}
-	h.broadcast(h.game.Players(), "‼️Server is Under Maintenance. Please wait!", false)
+	h.broadcast(h.game.Players(), "‼️ Sẽ được cập nhật, không thể tạo ván mới!", false)
 }
 
 func (h *Handler) doAdminResume(m *telebot.Message) {
@@ -47,7 +47,7 @@ func (h *Handler) doAdminResume(m *telebot.Message) {
 		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
 		return
 	}
-	h.broadcast(h.game.Players(), "✅ Server is Live now. Enjoy!", false)
+	h.broadcast(h.game.Players(), "✅ Server đã mở lại, chơi ngay!", false)
 }
 
 func (h *Handler) doDeposit(m *telebot.Message, operator *game.Player, ss []string) {
@@ -75,9 +75,9 @@ func (h *Handler) doDeposit(m *telebot.Message, operator *game.Player, ss []stri
 		Str("recipient_id", p.ID()).
 		Int64("amount", amount).Msg("deposit")
 
-	msg := fmt.Sprintf("💰%s đã bơm vào %d☘️.", p.Name(), amount)
+	msg := fmt.Sprintf("💰%s đã bơm vào %d🍁.", p.Name(), amount)
 	if amount < 0 {
-		msg = fmt.Sprintf("💸 %s đã rút ra %d☘️.", p.Name(), -amount)
+		msg = fmt.Sprintf("💸 %s đã rút ra %d🍁.", p.Name(), -amount)
 	}
 	h.broadcast(h.game.Players(), msg, false)
 }

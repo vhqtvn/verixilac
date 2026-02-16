@@ -236,7 +236,7 @@ func (h *Handler) ctx(m *telebot.Message) context.Context {
 }
 
 func (h *Handler) sendMessage(chat *telebot.Chat, msg string, buttons ...InlineButton) {
-	options := &telebot.SendOptions{}
+	options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdown}
 	if len(buttons) > 0 {
 		options.ReplyMarkup = &telebot.ReplyMarkup{
 			InlineKeyboard: ToTelebotInlineButtons(buttons),
@@ -246,7 +246,7 @@ func (h *Handler) sendMessage(chat *telebot.Chat, msg string, buttons ...InlineB
 }
 
 func (h *Handler) editMessage(m *telebot.Message, msg string, buttons ...InlineButton) {
-	options := &telebot.SendOptions{}
+	options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdown}
 	if len(buttons) > 0 {
 		options.ReplyMarkup = &telebot.ReplyMarkup{
 			InlineKeyboard: ToTelebotInlineButtons(buttons),
@@ -284,6 +284,7 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 			defer wg.Done()
 
 			options := &telebot.SendOptions{
+				ParseMode: telebot.ModeMarkdown,
 				ReplyMarkup: &telebot.ReplyMarkup{
 					InlineKeyboard: ToTelebotInlineButtons(buttons),
 				},
@@ -313,6 +314,7 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 
 func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, buttons ...InlineButton) {
 	options := &telebot.SendOptions{
+		ParseMode: telebot.ModeMarkdown,
 		ReplyMarkup: &telebot.ReplyMarkup{
 			InlineKeyboard: ToTelebotInlineButtons(buttons),
 		},

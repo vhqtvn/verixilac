@@ -37,6 +37,13 @@ func (p *Player) Name() string {
 	return p.name
 }
 
+func (p *Player) IconName() string {
+	if len(p.icon) > 0 {
+		return p.icon + p.name
+	}
+	return p.name
+}
+
 func (p *Player) IsAdmin() bool {
 	return p.isAdmin.Load()
 }

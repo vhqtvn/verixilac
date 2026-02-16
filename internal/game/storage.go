@@ -16,6 +16,7 @@ type (
 	stPlayer struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
+		Icon    string `json:"icon,omitempty"`
 		Balance int64  `json:"balance"`
 		RoomID  string `json:"roomId,omitempty"`
 		IsAdmin bool   `json:"isAdmin"`
@@ -87,6 +88,7 @@ func (m *Manager) SaveToStorage() error {
 		stP := stPlayer{
 			ID:      p.ID(),
 			Name:    p.Name(),
+			Icon:    p.Icon(),
 			Balance: p.Balance(),
 			IsAdmin: p.IsAdmin(),
 			RuleID:  p.Rule().ID,

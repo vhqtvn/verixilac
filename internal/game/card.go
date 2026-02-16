@@ -135,17 +135,17 @@ func (cs Cards) Type(isDealer ...bool) ResultType {
 func (cs Cards) TypeString(isDealer ...bool) string {
 	switch cs.Type(isDealer...) {
 	case TypeHighFive:
-		return fmt.Sprintf("ngũ linh: %d điểm ⚡️", cs.Value())
+		return fmt.Sprintf("🖐️ *Ngũ Linh*: %d điểm", cs.Value())
 	case TypeBusted:
-		return fmt.Sprintf("toang: %d điểm 💥", cs.Value())
+		return fmt.Sprintf("💥 *Quắc*: %d điểm", cs.Value())
 	case TypeBlackJack:
-		return "xì lác ⚡️"
+		return "✨ *Xì Lác* ✨"
 	case TypeDoubleBlackJack:
-		return "xì bàn ⚡️"
+		return "👑 *Xì Bàn* 👑"
 	case TypeTooLow:
-		return fmt.Sprintf("chưa đủ tẩy: %d điểm", cs.Value())
+		return fmt.Sprintf("👶 *Non*: %d điểm", cs.Value())
 	case TypeTooHigh:
-		return fmt.Sprintf("đền: %d điểm", cs.Value())
+		return fmt.Sprintf("💸 *Đền*: %d điểm", cs.Value())
 	default:
 		return fmt.Sprintf("%d điểm", cs.Value())
 	}

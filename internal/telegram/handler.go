@@ -86,13 +86,13 @@ func (h *Handler) doBet(m *telebot.Message, onQuery bool) {
 	gameID := strings.TrimSpace(ar[0])
 	g := h.game.FindGame(ctx, gameID)
 	if g == nil {
-		h.sendMessage(m.Chat, "Không có thông tin ván "+gameID)
+		h.sendMessage(m.Chat, "❌ Không có thông tin ván "+gameID)
 		return
 	}
 
 	amount := cast.ToUint64(ar[1])
 	if err := h.game.PlayerBet(ctx, g, p, amount); err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, "❌ "+stringer.Capitalize(err.Error()))
 		return
 	}
 }
@@ -102,7 +102,7 @@ func (h *Handler) doDeal(m *telebot.Message, onQuery bool) {
 	gameID := strings.TrimSpace(m.Payload)
 	g := h.game.FindGame(ctx, gameID)
 	if g == nil {
-		h.sendMessage(m.Chat, "Không tìm thấy ván "+gameID)
+		h.sendMessage(m.Chat, "❌ Không tìm thấy ván "+gameID)
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *Handler) doDeal(m *telebot.Message, onQuery bool) {
 		return
 	}
 
-	h.broadcastDeal(g.Room().Players(), "Chốt deal:\n\n"+g.PreparingBoard(), true)
+	h.broadcastDeal(g.Room().Players(), "🔒 *Chốt deal*:\n\n"+g.PreparingBoard(), true)
 
 	// send cards
 	for _, pg := range g.Players() {
@@ -132,9 +132,9 @@ func (h *Handler) doDeal(m *telebot.Message, onQuery bool) {
 			if !pg.IsDone() {
 				continue
 			}
-			msg := fmt.Sprintf("Bài của %s: %s\n%s đã thắng %d☘️",
-				pg.Name(), pg.Cards().String(false, false),
-				pg.Name(), pg.Reward())
+			msg := fmt.Sprintf("🃏 Bài của %s: %s\n%s đã thắng %d🍁 🏆",
+				game.EscapeMarkdown(pg.IconName()), pg.Cards().String(false, false),
+				game.EscapeMarkdown(pg.IconName()), pg.Reward())
 			h.broadcast(g.AllPlayers(), msg, false)
 		}
 	}
@@ -174,31 +174,31 @@ func (h *Handler) doCancel(m *telebot.Message, onQuery bool) {
 		return
 	}
 	if !pg.IsDealer() {
-		h.sendMessage(m.Chat, "Bạn không phải nhà cái")
+		h.sendMessage(m.Chat, "❌ Bạn không phải nhà cái")
 		return
 	}
 	if err := h.game.CancelGame(ctx, g); err != nil {
 		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
 		return
 	}
-	h.broadcast(g.Room().Players(), pg.Name()+" đã huỷ ván này", true, InlineButton{
+	h.broadcast(g.Room().Players(), "⛔ "+game.EscapeMarkdown(pg.IconName())+" đã huỷ ván này", true, InlineButton{
 		Text: "Tạo ván mới", Data: "/newgame",
 	})
 }
 
 func (h *Handler) onNewRoom(r *game.Room, creator *game.Player) {
 	// send to creator
-	h.sendMessage(ToTelebotChat(creator.ID()), "Bạn đã tạo phòng "+r.ID(), MakeNewlyCreatedRoomButtons(r)...)
+	h.sendMessage(ToTelebotChat(creator.ID()), "✅ Bạn đã tạo phòng "+r.ID(), MakeNewlyCreatedRoomButtons(r)...)
 
 	// send to other players in bot
 	players := FilterPlayers(h.game.Players(), creator.ID())
-	msg := creator.Name() + " đã tạo phòng " + r.ID()
+	msg := "🏠 " + game.EscapeMarkdown(creator.IconName()) + " đã tạo phòng " + r.ID()
 	buttons := []InlineButton{{Text: "Vào phòng", Data: "/join " + r.ID()}}
 	h.broadcast(players, msg, false, buttons...)
 }
 
 func (h *Handler) onNewGame(r *game.Room, g *game.Game) {
-	msg := "Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
+	msg := "📢 Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
 
 	// send to dealer
 	d := g.Dealer()
@@ -213,11 +213,11 @@ func (h *Handler) onNewGame(r *game.Room, g *game.Game) {
 
 func (h *Handler) onPlayerJoinRoom(r *game.Room, p *game.Player) {
 	players := FilterPlayers(r.Players(), p.ID())
-	h.broadcast(players, p.Name()+" vừa vào phòng "+r.ID(), false)
+	h.broadcast(players, "👋 "+game.EscapeMarkdown(p.IconName())+" vừa vào phòng "+r.ID(), false)
 }
 
 func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
-	msg := "Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
+	msg := "📢 Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
 	// Update the acting player immediately
 	h.broadcastDeal([]*game.Player{p.Player}, msg, true, MakeBetButtons(g)...)
 
@@ -236,7 +236,7 @@ func (h *Handler) doJoinRoom(m *telebot.Message, onQuery bool) {
 	roomID := strings.TrimSpace(m.Payload)
 	r := h.game.FindRoom(h.ctx(m), roomID)
 	if r == nil {
-		h.sendMessage(m.Chat, stringer.Capitalize("Không tìm thấy phòng "+roomID))
+		h.sendMessage(m.Chat, "❌ "+stringer.Capitalize("Không tìm thấy phòng "+roomID))
 		return
 	}
 
@@ -250,7 +250,7 @@ func (h *Handler) doJoinRoom(m *telebot.Message, onQuery bool) {
 	if onQuery {
 		h.editMessage(m, "Bạn đã vào phòng "+roomID)
 	} else {
-		h.sendMessage(m.Chat, "Bạn đã vào phòng "+roomID)
+		h.sendMessage(m.Chat, "✅ Bạn đã vào phòng "+roomID)
 	}
 }
 
@@ -259,7 +259,7 @@ func (h *Handler) doEndGame(m *telebot.Message, onQuery bool) bool {
 	gameID := strings.TrimSpace(m.Payload)
 	if len(gameID) == 0 {
 		if p.CurrentGame() == nil {
-			h.sendMessage(m.Chat, "Bạn chưa vào ván")
+			h.sendMessage(m.Chat, "❌ Bạn chưa vào ván")
 			return false
 		}
 		gameID = p.CurrentGame().ID()
@@ -342,7 +342,7 @@ func (h *Handler) onPlayerStand(g *game.Game, pg *game.PlayerInGame) {
 func (h *Handler) onPlayerHit(g *game.Game, pg *game.PlayerInGame) {
 	go func() {
 		players := FilterInGamePlayers(g.AllPlayers(), pg.ID())
-		h.broadcast(players, pg.Name()+" vừa rút thêm 1 lá", false)
+		h.broadcast(players, pg.IconName()+" vừa rút thêm 1 lá", false)
 	}()
 	h.broadcast(pg, "Bài của bạn: "+pg.Cards().String(false, pg.IsDealer()), true, MakePlayerButton(g, pg, false)...)
 }
@@ -382,18 +382,18 @@ func (h *Handler) doCompare(m *telebot.Message, onQuery bool) {
 	}
 
 	msgDealer := fmt.Sprintf("Bài của %s: %s",
-		to.Name(), to.Cards().String(false, false),
+		game.EscapeMarkdown(to.IconName()), to.Cards().String(false, false),
 	)
 
 	var msgPlayer string
 	if reward < 0 {
-		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %d☘️", to.Name(), -reward)
-		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %d☘️", -reward)
+		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %d🍁", game.EscapeMarkdown(to.IconName()), -reward)
+		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %d🍁", -reward)
 	} else if reward > 0 {
-		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %d☘️", to.Name(), reward)
-		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d☘️", reward)
+		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %d🍁", game.EscapeMarkdown(to.IconName()), reward)
+		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d🍁", reward)
 	} else {
-		msgDealer += fmt.Sprintf("\n%s và cái hoà nhau", to.Name())
+		msgDealer += fmt.Sprintf("\n🤝 %s và cái hoà nhau", game.EscapeMarkdown(to.IconName()))
 		msgPlayer = "🤝 Cái lật bài bạn và hoà. Bạn không bị mất tiền"
 	}
 	msgPlayer += fmt.Sprintf("\nBài của cái: %s",
@@ -410,7 +410,7 @@ func (h *Handler) doCompare(m *telebot.Message, onQuery bool) {
 
 func (h *Handler) onGameFinish(g *game.Game) {
 	_ = h.game.SaveToStorage()
-	msg := "Kết quả ván chơi!\n\n" + g.ResultBoard()
+	msg := "🏁 *Kết quả ván chơi!* 🏁\n\n" + g.ResultBoard()
 	h.broadcast(g.Room().Players(), msg, false, MakeResultButtons(g)...)
 }
 
@@ -421,11 +421,11 @@ func (h *Handler) onPlayerPlay(g *game.Game, pg *game.PlayerInGame) {
 				if p.IsDone() {
 					continue
 				}
-				msg := fmt.Sprintf("%s đang cầm %d lá", p.Name(), len(p.Cards()))
+				msg := fmt.Sprintf("%s đang cầm %d lá", game.EscapeMarkdown(p.IconName()), len(p.Cards()))
 				h.broadcast(g.Dealer(), msg, false, MakeDealerPlayingButtons(g, p)...)
 			}
 		}
-		h.broadcast(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "Tới lượt "+pg.Name(), false)
+		h.broadcast(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "👉 Tới lượt "+game.EscapeMarkdown(pg.IconName()), false)
 	}()
 	h.broadcast(pg, "Tới lượt bạn: "+pg.Cards().String(false, pg.IsDealer()), false, MakePlayerButton(g, pg, false)...)
 }
