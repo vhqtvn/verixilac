@@ -44,6 +44,9 @@ const (
 	sendQueueSize           = 1024
 	callbackQueueSize       = 1024
 	rateLimitMessagePerChat = 1007 * time.Millisecond
+
+	messageTypeNormal = 0
+	messageTypeLog    = 1
 )
 
 func (h *Handler) getChatWorker(chatID uint64) chan *botRequest {
@@ -253,7 +256,14 @@ func (h *Handler) editMessage(m *telebot.Message, msg string, buttons ...InlineB
 		}
 	}
 	editKey := fmt.Sprintf("edit:%d:%d", m.Chat.ID, m.ID)
+	// Editing a specific message user interacted with doesn't necessarily change the "last game message" status
+	// unless that message WAS the last game message.
+	// But `editMessage` is usually for invalid input response or immediate feedback to user command.
+	// Safe to ignore updating lastMessageType here?
+	// Actually, if we edit a message, we might be overwriting a Log?
+	// But `editMessage` edits `m`, which came from user updates.
 	h.botEdit(editKey, m, msg, options)
+
 }
 
 func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, buttons ...InlineButton) {
@@ -291,14 +301,39 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 			}
 			pm, ok := h.gameMessages.Load(p.ID())
 			if edit && ok && pm != nil {
-				editKey := fmt.Sprintf("game:%s", p.ID())
-				m, err := h.botEditSync(editKey, pm.(*telebot.Message), msg, options)
-				if err != nil {
-					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
-				} else if m != nil {
-					h.gameMessages.Store(p.ID(), m)
+				// If the last message was a LOG, we should NOT edit it with a normal message (State update),
+				// because that would effectively delete the log history from the user's view (since logs are transient).
+				// Instead, we should send a NEW message for the state update, which preserves the log history.
+				lastType, _ := h.lastMessageType.Load(p.ID())
+				isLog := lastType == messageTypeLog
+
+				if edit && !isLog {
+					// Update existing message
+					h.lastMessageType.Store(p.ID(), messageTypeNormal)
+
+					editKey := fmt.Sprintf("game:%s", p.ID())
+					m, err := h.botEditSync(editKey, pm.(*telebot.Message), msg, options)
+					if err != nil {
+						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
+					} else if m != nil {
+						h.gameMessages.Store(p.ID(), m)
+					}
+				} else {
+					// Sending new message (either forced or because last message was a log)
+					h.lastMessageType.Store(p.ID(), messageTypeNormal)
+
+					m, err := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
+					if err != nil {
+						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
+					} else if m != nil {
+						h.gameMessages.Store(p.ID(), m)
+					}
 				}
 			} else {
+
+				// Sending new message
+				h.lastMessageType.Store(p.ID(), messageTypeNormal)
+
 				m, err := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
@@ -310,6 +345,75 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 	}
 
 	wg.Wait()
+}
+
+func (h *Handler) broadcastLog(receivers interface{}, msg string) {
+	var recvs []*game.Player
+	switch v := receivers.(type) {
+	case []*game.Player:
+		recvs = v
+	case *game.Player:
+		recvs = append(recvs, v)
+	case []*game.PlayerInGame:
+		tmp := v
+		for i := range tmp {
+			recvs = append(recvs, tmp[i].Player)
+		}
+	case *game.PlayerInGame:
+		recvs = append(recvs, v.Player)
+	default:
+		log.Error().Str("type", reflect.TypeOf(receivers).String()).Msg("invalid receivers type")
+		return
+	}
+
+	wg := sync.WaitGroup{}
+	for _, p := range recvs {
+		wg.Add(1)
+		p := p
+
+		go func() {
+			defer wg.Done()
+
+			lastType, _ := h.lastMessageType.Load(p.ID())
+			pm, ok := h.gameMessages.Load(p.ID())
+
+			if ok && pm != nil && lastType == messageTypeLog {
+				// Append to previous message
+				prevMsg := pm.(*telebot.Message)
+				newText := prevMsg.Text + "\n" + msg
+
+				// We don't store new message object because ID stays same, content changes.
+				// But we need to update the Text in our stored copy if we want to append again?
+				// botEditSync returns the edited message.
+
+				editKey := fmt.Sprintf("game:%s", p.ID())
+				// Use nil options to keep existing markup if any?
+				// Usually logs don't have markup.
+				m, err := h.botEditSync(editKey, prevMsg, newText, nil)
+				if err != nil {
+					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("append log failed")
+					// If edit fails (e.g. message too old), fall back to send?
+					// For now just log error.
+				} else if m != nil {
+					h.gameMessages.Store(p.ID(), m)
+				}
+			} else {
+				// Send as new message
+				h.lastMessageType.Store(p.ID(), messageTypeLog)
+
+				options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdown}
+				m, err := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
+				if err != nil {
+					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send log failed")
+				} else if m != nil {
+					h.gameMessages.Store(p.ID(), m)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
 }
 
 func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, buttons ...InlineButton) {

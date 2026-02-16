@@ -18,8 +18,9 @@ type Handler struct {
 	game *game.Manager
 	bot  *telebot.Bot
 
-	gameMessages sync.Map
-	dealMessages sync.Map
+	gameMessages    sync.Map
+	dealMessages    sync.Map
+	lastMessageType sync.Map
 
 	chatWorkers      sync.Map
 	sendQueue        chan *botRequest
@@ -342,8 +343,9 @@ func (h *Handler) onPlayerStand(g *game.Game, pg *game.PlayerInGame) {
 func (h *Handler) onPlayerHit(g *game.Game, pg *game.PlayerInGame) {
 	go func() {
 		players := FilterInGamePlayers(g.AllPlayers(), pg.ID())
-		h.broadcast(players, pg.IconName()+" vừa rút thêm 1 lá", false)
+		h.broadcastLog(players, pg.IconName()+" vừa rút thêm 1 lá")
 	}()
+
 	h.broadcast(pg, "Bài của bạn: "+pg.Cards().String(false, pg.IsDealer()), true, MakePlayerButton(g, pg, false)...)
 }
 
@@ -425,8 +427,9 @@ func (h *Handler) onPlayerPlay(g *game.Game, pg *game.PlayerInGame) {
 				h.broadcast(g.Dealer(), msg, false, MakeDealerPlayingButtons(g, p)...)
 			}
 		}
-		h.broadcast(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "👉 Tới lượt "+game.EscapeMarkdown(pg.IconName()), false)
+		h.broadcastLog(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "👉 Tới lượt "+game.EscapeMarkdown(pg.IconName()))
 	}()
+
 	h.broadcast(pg, "Tới lượt bạn: "+pg.Cards().String(false, pg.IsDealer()), false, MakePlayerButton(g, pg, false)...)
 }
 
