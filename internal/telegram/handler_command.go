@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
-	"unicode/utf8"
+
+	"github.com/rivo/uniseg"
 
 	"github.com/rs/zerolog/log"
 	"gopkg.in/tucnak/telebot.v2"
@@ -14,6 +16,7 @@ import (
 	"github.com/psucodervn/verixilac/internal/stringer"
 )
 
+var emojiRegex = regexp.MustCompile(`\p{So}`)
 var (
 	commands = []telebot.Command{
 		{
@@ -283,8 +286,14 @@ func (h *Handler) CmdPass(m *telebot.Message) {
 func (h *Handler) CmdSetIcon(m *telebot.Message) {
 	p := h.joinServer(m)
 	icon := strings.TrimSpace(m.Payload)
-	if utf8.RuneCountInString(icon) != 1 || len(icon) == 1 {
-		h.sendMessage(m.Chat, fmt.Sprintf("Cú pháp: /seticon icon. Icon chỉ được phép là 1 ký tự Unicode, bạn đã gửi %d kí tự dài %d bytes (`%s`)", utf8.RuneCountInString(icon), len(icon), icon))
+	gr := uniseg.NewGraphemes(icon)
+	count := 0
+	for gr.Next() {
+		count++
+	}
+
+	if count != 1 || !emojiRegex.MatchString(icon) {
+		h.sendMessage(m.Chat, fmt.Sprintf("Cú pháp: /seticon icon. Icon chỉ được phép là 1 ký tự Unicode, bạn đã gửi %d kí tự Unicode (`%s`)", count, icon))
 		return
 	}
 	p.SetIcon(icon)
