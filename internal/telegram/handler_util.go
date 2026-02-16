@@ -78,29 +78,34 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 			err error
 		)
 
-		switch req.reqType {
-		case botRequestSend:
-			if req.options != nil {
-				m, err = h.bot.Send(req.chat, req.text, req.options)
-			} else {
-				m, err = h.bot.Send(req.chat, req.text)
+		for i := 0; i < 3; i++ {
+			switch req.reqType {
+			case botRequestSend:
+				if req.options != nil {
+					m, err = h.bot.Send(req.chat, req.text, req.options)
+				} else {
+					m, err = h.bot.Send(req.chat, req.text)
+				}
+
+			case botRequestEdit:
+				if req.options != nil {
+					m, err = h.bot.Edit(req.message, req.text, req.options)
+				} else {
+					m, err = h.bot.Edit(req.message, req.text)
+				}
+
+			case botRequestEditMarkup:
+				m, err = h.bot.Edit(req.message, req.message.Text, &telebot.SendOptions{
+					ReplyMarkup: req.markup,
+				})
 			}
 
-		case botRequestEdit:
-			if req.options != nil {
-				m, err = h.bot.Edit(req.message, req.text, req.options)
+			if err != nil {
+				log.Err(err).Str("text", req.text).Int("type", int(req.reqType)).Msg("bot request failed")
+				time.Sleep(1 * time.Second)
 			} else {
-				m, err = h.bot.Edit(req.message, req.text)
+				break
 			}
-
-		case botRequestEditMarkup:
-			m, err = h.bot.Edit(req.message, req.message.Text, &telebot.SendOptions{
-				ReplyMarkup: req.markup,
-			})
-		}
-
-		if err != nil {
-			log.Err(err).Str("text", req.text).Int("type", int(req.reqType)).Msg("bot request failed")
 		}
 
 		if req.result != nil {

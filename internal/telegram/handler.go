@@ -205,8 +205,10 @@ func (h *Handler) onNewGame(r *game.Room, g *game.Game) {
 	h.broadcastDeal([]*game.Player{d.Player}, msg, false, MakeDealerPrepareButtons(g)...)
 
 	// send to members
-	players := FilterPlayers(r.Players(), d.ID())
-	h.broadcastDeal(players, msg, false, MakeBetButtons(g)...)
+	go func() {
+		players := FilterPlayers(r.Players(), d.ID())
+		h.broadcastDeal(players, msg, false, MakeBetButtons(g)...)
+	}()
 }
 
 func (h *Handler) onPlayerJoinRoom(r *game.Room, p *game.Player) {
@@ -216,12 +218,17 @@ func (h *Handler) onPlayerJoinRoom(r *game.Room, p *game.Player) {
 
 func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
 	msg := "Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
-	dealer := g.Dealer()
-	h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, MakeDealerPrepareButtons(g)...)
+	// Update the acting player immediately
+	h.broadcastDeal([]*game.Player{p.Player}, msg, true, MakeBetButtons(g)...)
 
-	r := g.Room()
-	players := FilterPlayers(r.Players(), dealer.ID())
-	h.broadcastDeal(players, msg, true, MakeBetButtons(g)...)
+	go func() {
+		dealer := g.Dealer()
+		h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, MakeDealerPrepareButtons(g)...)
+
+		r := g.Room()
+		players := FilterPlayers(r.Players(), dealer.ID(), p.ID())
+		h.broadcastDeal(players, msg, true, MakeBetButtons(g)...)
+	}()
 }
 
 func (h *Handler) doJoinRoom(m *telebot.Message, onQuery bool) {
@@ -333,8 +340,10 @@ func (h *Handler) onPlayerStand(g *game.Game, pg *game.PlayerInGame) {
 }
 
 func (h *Handler) onPlayerHit(g *game.Game, pg *game.PlayerInGame) {
-	players := FilterInGamePlayers(g.AllPlayers(), pg.ID())
-	h.broadcast(players, pg.Name()+" vừa rút thêm 1 lá", false)
+	go func() {
+		players := FilterInGamePlayers(g.AllPlayers(), pg.ID())
+		h.broadcast(players, pg.Name()+" vừa rút thêm 1 lá", false)
+	}()
 	h.broadcast(pg, "Bài của bạn: "+pg.Cards().String(false, pg.IsDealer()), true, MakePlayerButton(g, pg, false)...)
 }
 
@@ -406,17 +415,19 @@ func (h *Handler) onGameFinish(g *game.Game) {
 }
 
 func (h *Handler) onPlayerPlay(g *game.Game, pg *game.PlayerInGame) {
-	if pg.IsDealer() {
-		for _, p := range g.Players() {
-			if p.IsDone() {
-				continue
+	go func() {
+		if pg.IsDealer() {
+			for _, p := range g.Players() {
+				if p.IsDone() {
+					continue
+				}
+				msg := fmt.Sprintf("%s đang cầm %d lá", p.Name(), len(p.Cards()))
+				h.broadcast(g.Dealer(), msg, false, MakeDealerPlayingButtons(g, p)...)
 			}
-			msg := fmt.Sprintf("%s đang cầm %d lá", p.Name(), len(p.Cards()))
-			h.broadcast(g.Dealer(), msg, false, MakeDealerPlayingButtons(g, p)...)
 		}
-	}
+		h.broadcast(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "Tới lượt "+pg.Name(), false)
+	}()
 	h.broadcast(pg, "Tới lượt bạn: "+pg.Cards().String(false, pg.IsDealer()), false, MakePlayerButton(g, pg, false)...)
-	h.broadcast(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "Tới lượt "+pg.Name(), false)
 }
 
 func (h *Handler) sendChat(receivers []*game.Player, msg string) {
