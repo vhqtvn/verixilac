@@ -48,6 +48,7 @@ func (m *Manager) LoadFromStorage() error {
 		p := NewPlayer(stP.ID, stP.Name, stP.Balance)
 		p.SetIsAdmin(stP.IsAdmin)
 		p.SetRule(stP.RuleID)
+		p.SetIcon(stP.Icon)
 		m.players.Store(p.ID(), p)
 		if len(stP.RoomID) > 0 {
 			rr, ok := m.rooms.Load(stP.RoomID)

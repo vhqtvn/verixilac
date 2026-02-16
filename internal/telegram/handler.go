@@ -132,7 +132,7 @@ func (h *Handler) doDeal(m *telebot.Message, onQuery bool) {
 			if !pg.IsDone() {
 				continue
 			}
-			msg := fmt.Sprintf("🃏 Bài của %s: %s\n%s đã thắng %d🍁 🏆",
+			msg := fmt.Sprintf("🃏 Bài của %s: %s\n%s đã thắng %d🍂 🏆",
 				game.EscapeMarkdown(pg.IconName()), pg.Cards().String(false, false),
 				game.EscapeMarkdown(pg.IconName()), pg.Reward())
 			h.broadcast(g.AllPlayers(), msg, false)
@@ -387,11 +387,11 @@ func (h *Handler) doCompare(m *telebot.Message, onQuery bool) {
 
 	var msgPlayer string
 	if reward < 0 {
-		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %d🍁", game.EscapeMarkdown(to.IconName()), -reward)
-		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %d🍁", -reward)
+		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %d🍂", game.EscapeMarkdown(to.IconName()), -reward)
+		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %d🍂", -reward)
 	} else if reward > 0 {
-		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %d🍁", game.EscapeMarkdown(to.IconName()), reward)
-		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d🍁", reward)
+		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %d🍂", game.EscapeMarkdown(to.IconName()), reward)
+		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d🍂", reward)
 	} else {
 		msgDealer += fmt.Sprintf("\n🤝 %s và cái hoà nhau", game.EscapeMarkdown(to.IconName()))
 		msgPlayer = "🤝 Cái lật bài bạn và hoà. Bạn không bị mất tiền"

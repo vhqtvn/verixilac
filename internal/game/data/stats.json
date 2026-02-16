@@ -1,0 +1,10 @@
+{
+  "global": {
+    "totalGames": 0,
+    "bankerWins": 0,
+    "playerWins": 0,
+    "draws": 0
+  },
+  "players": {},
+  "pairwise": {}
+}
