@@ -69,13 +69,20 @@ func run(cmd *cobra.Command, args []string) {
 
 	bh := telegram.NewHandler(manager, bots)
 
+	// Map token -> bot for quick lookup if needed, or iterate
+	// We'll use the token as path suffix
+	botMap := make(map[string]*telebot.Bot)
+	for _, b := range bots {
+		botMap[b.Token] = b
+	}
+
 	if useWebhook {
 		log.Info().
 			Str("ingress_url", cfg.Telegram.BotIngressUrl).
 			Str("public_url", cfg.Telegram.BotPublicUrl).
 			Msg("starting in VH webhook mode")
 
-		// Register handlers without starting the long-poller
+		// Register handlers without starting the long-poller (already done in Setup)
 		if err := bh.Setup(); err != nil {
 			log.Fatal().Err(err).Msg("failed to setup bot handler")
 		}
@@ -100,30 +107,59 @@ func run(cmd *cobra.Command, args []string) {
 				return
 			}
 
-			// For now, if webhook is used, we only support single bot or need logic todispatch
-			// Assuming single bot for webhook or braodcast to all?
-			// If we process update with wrong bot, it might fail signature check?
-			// But update body doesn't have signature.
-			// We'll just use the first bot for processing updates from webhook
-			if len(bots) > 0 {
-				bots[0].ProcessUpdate(update)
+			// Route based on path suffix (should contain token)
+			// req.Path e.g. "/webhook/123456:ABC-DEF"
+			// Or if we set PublicURL as base, Telegram appends nothing unless we specify.
+			// Below we set Endpoint to PublicURL + "/" + token.
+			// So path should end with token.
+
+			var targetBot *telebot.Bot
+			// Simple check: iterate bots and see if token is in path
+			// Or check map against path suffix
+			for token, b := range botMap {
+				if strings.HasSuffix(req.Path, token) {
+					targetBot = b
+					break
+				}
 			}
+
+			if targetBot == nil {
+				// Fallback to first bot if path doesn't match (e.g. legacy setup)
+				// Or log warning
+				if len(bots) > 0 {
+					targetBot = bots[0]
+				} else {
+					log.Warn().Str("path", req.Path).Msg("no matching bot for webhook path")
+					return
+				}
+			}
+
+			targetBot.ProcessUpdate(update)
 		})
 
 		vh.Start()
 		defer vh.Stop()
 
-		// Set telegram webhook to public URL
-		if cfg.Telegram.BotPublicUrl != "" && len(bots) > 0 {
-			if err := bots[0].SetWebhook(&telebot.Webhook{
-				Listen: ":8443",
-				Endpoint: &telebot.WebhookEndpoint{
-					PublicURL: cfg.Telegram.BotPublicUrl,
-				},
-			}); err != nil {
-				log.Error().Err(err).Msg("failed to set telegram webhook")
-			} else {
-				log.Info().Str("url", cfg.Telegram.BotPublicUrl).Msg("telegram webhook set")
+		// Set telegram webhook for ALL bots to their unique URLs
+		if cfg.Telegram.BotPublicUrl != "" {
+			for _, b := range bots {
+				// Ensure clean base URL
+				baseURL := strings.TrimRight(cfg.Telegram.BotPublicUrl, "/")
+				webhookURL := baseURL + "/" + b.Token
+
+				if err := b.SetWebhook(&telebot.Webhook{
+					Listen: ":8443", // internal listen port, unrelated to external URL?
+					// Telebot Webhook struct uses Listen for starting server, but we use vhwebhook so we don't start server.
+					// We just need to register the URL with Telegram.
+					// Using &telebot.WebhookEndpoint is correct for SetWebhook call.
+					Endpoint: &telebot.WebhookEndpoint{
+						PublicURL: webhookURL,
+					},
+				}); err != nil {
+					log.Error().Err(err).Str("bot", b.Me.Username).Msg("failed to set telegram webhook")
+				} else {
+					log.Info().Str("url", webhookURL).Str("bot", b.Me.Username).Msg("telegram webhook set")
+				}
 			}
 		}
 
