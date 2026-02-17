@@ -200,8 +200,13 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 
 				// Check for 429 Retry After
 				if matches := retryAfterRegex.FindStringSubmatch(err.Error()); len(matches) > 1 {
-					seconds, _ := strconv.Atoi(matches[1])
-					log.Warn().Int("bot_idx", botIdx).Int("seconds", seconds).Msg("telegram rate limit, sleeping")
+					milliseconds, _ := strconv.Atoi(matches[1])
+					log.Warn().Int("bot_idx", botIdx).Str("user", GetUsername(req.chat)).Int("milliseconds", milliseconds).Msg("telegram rate limit, sleeping")
+
+					if milliseconds < 3000 {
+						time.Sleep(time.Duration(milliseconds) * time.Millisecond)
+						continue
+					}
 
 					// If rate limited, we can try switching bot immediately in outer loop?
 					// Yes, break inner loop and let outer loop try next bot.
@@ -216,11 +221,11 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 				}
 				// Simple string check is robust enough for standard telegram errors
 				if isPermanentError(errMsg) {
-					log.Warn().Int("bot_idx", botIdx).Err(err).Msg("bot failed permanently, switching")
+					log.Warn().Int("bot_idx", botIdx).Str("user", GetUsername(req.chat)).Err(err).Msg("bot failed permanently, switching")
 					break // break inner loop, try next bot
 				}
 
-				log.Err(err).Interface("what", req.what).Int("type", int(req.reqType)).Msg("bot request failed")
+				log.Err(err).Interface("what", req.what).Str("user", GetUsername(req.chat)).Int("type", int(req.reqType)).Msg("bot request failed")
 				retryCount++
 				if retryCount >= 3 {
 					break // break inner loop, try next bot
