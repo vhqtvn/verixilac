@@ -448,8 +448,12 @@ func (h *Handler) sendChat(receivers []*game.Player, msg string) {
 	}
 }
 
-func (h *Handler) sendMedia(receivers []*game.Player, what interface{}, options *telebot.SendOptions) {
+func (h *Handler) sendMedia(receivers []*game.Player, what interface{}, options *telebot.SendOptions, fromBotIdx int) {
 	for _, p := range receivers {
-		h.botSend(ToTelebotChat(p.ID()), what, options)
+		if fromBotIdx >= 0 {
+			h.botSendFixed(ToTelebotChat(p.ID()), what, options, fromBotIdx)
+		} else {
+			h.botSend(ToTelebotChat(p.ID()), what, options)
+		}
 	}
 }

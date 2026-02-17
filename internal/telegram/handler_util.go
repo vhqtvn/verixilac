@@ -30,14 +30,15 @@ const (
 )
 
 type botRequest struct {
-	reqType botRequestType
-	chat    *telebot.Chat        // for Send
-	message *telebot.Message     // for Edit / EditMarkup
-	what    interface{}          // message text or media
-	options *telebot.SendOptions // send/edit options
-	markup  *telebot.ReplyMarkup // for EditMarkup only
-	editKey string               // dedup key for edits (empty = no dedup)
-	result  chan botResponse     // nil = fire-and-forget
+	reqType     botRequestType
+	chat        *telebot.Chat        // for Send
+	message     *telebot.Message     // for Edit / EditMarkup
+	what        interface{}          // message text or media
+	options     *telebot.SendOptions // send/edit options
+	markup      *telebot.ReplyMarkup // for EditMarkup only
+	editKey     string               // dedup key for edits (empty = no dedup)
+	fixedBotIdx int                  // -1 = any/mapped, >= 0 = forced bot
+	result      chan botResponse     // nil = fire-and-forget
 }
 
 type botResponse struct {
@@ -153,12 +154,20 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 			currentBotIndex = 0
 		}
 
-		// Create attempt order: currentBotIndex first, then others
+		// Create attemptOrder
 		attemptOrder := make([]int, 0, len(h.bots))
-		attemptOrder = append(attemptOrder, currentBotIndex)
-		for i := 0; i < len(h.bots); i++ {
-			if i != currentBotIndex {
-				attemptOrder = append(attemptOrder, i)
+
+		if req.fixedBotIdx >= 0 && req.fixedBotIdx < len(h.bots) {
+			// If fixed bot is requested, ONLY try that bot
+			currentBotIndex = req.fixedBotIdx
+			attemptOrder = append(attemptOrder, currentBotIndex)
+		} else {
+			// Normal failover logic
+			attemptOrder = append(attemptOrder, currentBotIndex)
+			for i := 0; i < len(h.bots); i++ {
+				if i != currentBotIndex {
+					attemptOrder = append(attemptOrder, i)
+				}
 			}
 		}
 
@@ -307,10 +316,22 @@ func (h *Handler) startQueue() {
 // botSend enqueues a send request and returns immediately.
 func (h *Handler) botSend(chat *telebot.Chat, what interface{}, options *telebot.SendOptions) {
 	h.sendQueue <- &botRequest{
-		reqType: botRequestSend,
-		chat:    chat,
-		what:    what,
-		options: options,
+		reqType:     botRequestSend,
+		chat:        chat,
+		what:        what,
+		options:     options,
+		fixedBotIdx: -1,
+	}
+}
+
+// botSendFixed enqueues a send request forced to a specific bot.
+func (h *Handler) botSendFixed(chat *telebot.Chat, what interface{}, options *telebot.SendOptions, botIdx int) {
+	h.sendQueue <- &botRequest{
+		reqType:     botRequestSend,
+		chat:        chat,
+		what:        what,
+		options:     options,
+		fixedBotIdx: botIdx,
 	}
 }
 
@@ -318,11 +339,12 @@ func (h *Handler) botSend(chat *telebot.Chat, what interface{}, options *telebot
 // If editKey is non-empty, only the latest enqueued edit for that key will execute.
 func (h *Handler) botEdit(editKey string, m *telebot.Message, what interface{}, options *telebot.SendOptions) {
 	req := &botRequest{
-		reqType: botRequestEdit,
-		message: m,
-		what:    what,
-		options: options,
-		editKey: editKey,
+		reqType:     botRequestEdit,
+		message:     m,
+		what:        what,
+		options:     options,
+		editKey:     editKey,
+		fixedBotIdx: -1,
 	}
 	if editKey != "" {
 		h.editLatest.Store(editKey, req)
@@ -333,9 +355,10 @@ func (h *Handler) botEdit(editKey string, m *telebot.Message, what interface{}, 
 // botEditReplyMarkup enqueues an EditReplyMarkup request. Fire-and-forget.
 func (h *Handler) botEditReplyMarkup(m *telebot.Message, markup *telebot.ReplyMarkup) {
 	h.sendQueue <- &botRequest{
-		reqType: botRequestEditMarkup,
-		message: m,
-		markup:  markup,
+		reqType:     botRequestEditMarkup,
+		message:     m,
+		markup:      markup,
+		fixedBotIdx: -1,
 	}
 }
 
@@ -345,11 +368,12 @@ func (h *Handler) botEditReplyMarkup(m *telebot.Message, markup *telebot.ReplyMa
 func (h *Handler) botSendSync(chat *telebot.Chat, what interface{}, options *telebot.SendOptions) (*telebot.Message, error) {
 	ch := make(chan botResponse, 1)
 	h.sendQueue <- &botRequest{
-		reqType: botRequestSend,
-		chat:    chat,
-		what:    what,
-		options: options,
-		result:  ch,
+		reqType:     botRequestSend,
+		chat:        chat,
+		what:        what,
+		options:     options,
+		result:      ch,
+		fixedBotIdx: -1,
 	}
 	res := <-ch
 	return res.msg, res.err
@@ -359,12 +383,13 @@ func (h *Handler) botSendSync(chat *telebot.Chat, what interface{}, options *tel
 func (h *Handler) botEditSync(editKey string, m *telebot.Message, what interface{}, options *telebot.SendOptions) (*telebot.Message, error) {
 	ch := make(chan botResponse, 1)
 	req := &botRequest{
-		reqType: botRequestEdit,
-		message: m,
-		what:    what,
-		options: options,
-		editKey: editKey,
-		result:  ch,
+		reqType:     botRequestEdit,
+		message:     m,
+		what:        what,
+		options:     options,
+		editKey:     editKey,
+		result:      ch,
+		fixedBotIdx: -1,
 	}
 	if editKey != "" {
 		h.editLatest.Store(editKey, req)

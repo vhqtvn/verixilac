@@ -498,9 +498,14 @@ func (h *Handler) onMedia(m *telebot.Message) {
 		icon = p.Icon()
 	}
 
+	fromBotIdx := -1
+	if val, ok := h.userBotMap.Load(m.Chat.ID); ok {
+		fromBotIdx = val.(int)
+	}
+
 	if m.Sticker != nil {
 		h.sendChat(ps, icon+" "+p.Name()+" đã gửi một sticker:")
-		h.sendMedia(ps, m.Sticker, nil)
+		h.sendMedia(ps, m.Sticker, nil, fromBotIdx)
 	} else {
 		caption := icon + " " + p.Name()
 		if m.Caption != "" {
@@ -516,6 +521,6 @@ func (h *Handler) onMedia(m *telebot.Message) {
 			v.Caption = caption
 		}
 
-		h.sendMedia(ps, what, nil)
+		h.sendMedia(ps, what, nil, fromBotIdx)
 	}
 }
