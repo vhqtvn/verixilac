@@ -16,7 +16,10 @@ import (
 
 type Handler struct {
 	game *game.Manager
-	bot  *telebot.Bot
+	bots []*telebot.Bot
+
+	userBotMap   sync.Map // int64 -> int (bot index)
+	botUsernames []string // cached usernames for notification
 
 	gameMessages    sync.Map
 	dealMessages    sync.Map
@@ -31,13 +34,19 @@ type Handler struct {
 	mu sync.RWMutex
 }
 
-func NewHandler(manager *game.Manager, bot *telebot.Bot) *Handler {
+func NewHandler(manager *game.Manager, bots []*telebot.Bot) *Handler {
 	h := &Handler{
 		game:             manager,
-		bot:              bot,
+		bots:             bots,
 		sendQueue:        make(chan *botRequest, sendQueueSize),
 		callbackAckQueue: make(chan *telebot.Callback, callbackQueueSize),
 	}
+
+	h.botUsernames = make([]string, len(bots))
+	for i, b := range bots {
+		h.botUsernames[i] = b.Me.Username
+	}
+
 	h.startQueue()
 	return h
 }

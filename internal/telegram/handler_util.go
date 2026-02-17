@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +16,8 @@ import (
 
 	"github.com/psucodervn/verixilac/internal/game"
 )
+
+var retryAfterRegex = regexp.MustCompile(`telegram: retry after (\d+) \(429\)`)
 
 // --- Queue types ---
 
@@ -41,9 +46,10 @@ type botResponse struct {
 }
 
 const (
-	sendQueueSize           = 1024
-	callbackQueueSize       = 1024
-	rateLimitMessagePerChat = 1007 * time.Millisecond
+	sendQueueSize                   = 1024
+	callbackQueueSize               = 1024
+	rateLimitMessagePerChat         = 1007 * time.Millisecond
+	rateLimitMessagePerSecondGlobal = 20
 
 	messageTypeNormal = 0
 	messageTypeLog    = 1
@@ -70,6 +76,63 @@ func (h *Handler) getChatWorker(chatID uint64) chan *botRequest {
 	return ch
 }
 
+func (h *Handler) getBot(chatID int64) *telebot.Bot {
+	if val, ok := h.userBotMap.Load(chatID); ok {
+		idx := val.(int)
+		if idx >= 0 && idx < len(h.bots) {
+			return h.bots[val.(int)]
+		}
+	}
+	if len(h.bots) > 0 {
+		return h.bots[0]
+	}
+	return nil
+}
+
+func (h *Handler) notifySwitchBots(chatID int64, currentBotIndex int) {
+	if len(h.bots) <= 1 {
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString("⚠️ Bot đang bị giới hạn tốc độ. Vui lòng chuyển sang các bot sau để tiếp tục:\n")
+
+	count := 0
+	for i, username := range h.botUsernames {
+		if i == currentBotIndex {
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("- [%s](https://t.me/%s)\n", username, username))
+		count++
+	}
+
+	if count == 0 {
+		return
+	}
+
+	msg := sb.String()
+	chat := &telebot.Chat{ID: chatID}
+
+	// Try to send via other bots first (if user has started them, it will work)
+	for i, bot := range h.bots {
+		if i == currentBotIndex {
+			continue
+		}
+		// Use a fire-and-forget approach running in a separate goroutine
+		go func(b *telebot.Bot) {
+			_, _ = b.Send(chat, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
+		}(bot)
+	}
+
+	// Also try to send via current bot (might be delayed but better than nothing)
+	go func() {
+		if currentBotIndex >= 0 && currentBotIndex < len(h.bots) {
+			bot := h.bots[currentBotIndex]
+			_, _ = bot.Send(chat, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
+		}
+	}()
+}
+
 func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 	limiter := rate.NewLimiter(rate.Every(rateLimitMessagePerChat), 3)
 
@@ -81,33 +144,96 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 			err error
 		)
 
-		for i := 0; i < 3; i++ {
-			switch req.reqType {
-			case botRequestSend:
-				if req.options != nil {
-					m, err = h.bot.Send(req.chat, req.what, req.options)
-				} else {
-					m, err = h.bot.Send(req.chat, req.what)
-				}
+		currentBotIndex := 0
+		if val, ok := h.userBotMap.Load(int64(chatID)); ok {
+			currentBotIndex = val.(int)
+		}
+		// Sanity check
+		if currentBotIndex < 0 || currentBotIndex >= len(h.bots) {
+			currentBotIndex = 0
+		}
 
-			case botRequestEdit:
-				if req.options != nil {
-					m, err = h.bot.Edit(req.message, req.what, req.options)
-				} else {
-					m, err = h.bot.Edit(req.message, req.what)
-				}
+		// Create attempt order: currentBotIndex first, then others
+		attemptOrder := make([]int, 0, len(h.bots))
+		attemptOrder = append(attemptOrder, currentBotIndex)
+		for i := 0; i < len(h.bots); i++ {
+			if i != currentBotIndex {
+				attemptOrder = append(attemptOrder, i)
+			}
+		}
 
-			case botRequestEditMarkup:
-				m, err = h.bot.Edit(req.message, req.message.Text, &telebot.SendOptions{
-					ReplyMarkup: req.markup,
-				})
+		success := false
+		for _, botIdx := range attemptOrder {
+			bot := h.bots[botIdx]
+			if bot == nil {
+				continue
 			}
 
-			if err != nil {
+			// Inner retry loop for specific bot (e.g. temporary network flake)
+			retryCount := 0
+			for {
+				switch req.reqType {
+				case botRequestSend:
+					if req.options != nil {
+						m, err = bot.Send(req.chat, req.what, req.options)
+					} else {
+						m, err = bot.Send(req.chat, req.what)
+					}
+
+				case botRequestEdit:
+					if req.options != nil {
+						m, err = bot.Edit(req.message, req.what, req.options)
+					} else {
+						m, err = bot.Edit(req.message, req.what)
+					}
+
+				case botRequestEditMarkup:
+					m, err = bot.Edit(req.message, req.message.Text, &telebot.SendOptions{
+						ReplyMarkup: req.markup,
+					})
+				}
+
+				if err == nil {
+					success = true
+					break // break inner retry loop
+				}
+
+				// Check for 429 Retry After
+				if matches := retryAfterRegex.FindStringSubmatch(err.Error()); len(matches) > 1 {
+					seconds, _ := strconv.Atoi(matches[1])
+					log.Warn().Int("bot_idx", botIdx).Int("seconds", seconds).Msg("telegram rate limit, sleeping")
+
+					// If rate limited, we can try switching bot immediately in outer loop?
+					// Yes, break inner loop and let outer loop try next bot.
+					// But we should NOT increment retryCount here as it's a "soft" failure for this bot.
+					break
+				}
+
+				// Check for Forbidden/Unauthorized - these are permanent for this bot
+				errMsg := err.Error()
+				if reflect.TypeOf(err).String() == "*telebot.Error" {
+					// Telebot errors might have Code/Description
+				}
+				// Simple string check is robust enough for standard telegram errors
+				if isPermanentError(errMsg) {
+					log.Warn().Int("bot_idx", botIdx).Err(err).Msg("bot failed permanently, switching")
+					break // break inner loop, try next bot
+				}
+
 				log.Err(err).Interface("what", req.what).Int("type", int(req.reqType)).Msg("bot request failed")
+				retryCount++
+				if retryCount >= 3 {
+					break // break inner loop, try next bot
+				}
 				time.Sleep(1 * time.Second)
-			} else {
-				break
+			}
+
+			if success {
+				// Update mapping if we used a different bot
+				if botIdx != currentBotIndex {
+					h.userBotMap.Store(int64(chatID), botIdx)
+				}
+				break // break outer loop (bots)
 			}
 		}
 
@@ -115,6 +241,15 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 			req.result <- botResponse{msg: m, err: err}
 		}
 	}
+}
+
+func isPermanentError(msg string) bool {
+	msg = reflect.ValueOf(msg).String() // simple string
+	// "Forbidden: bot was blocked by the user"
+	// "Forbidden: user is deactivated"
+	// "Bad Request: chat not found"
+	// "Unauthorized"
+	return regexp.MustCompile(`(?i)(forbidden|unauthorized|chat not found|user not found)`).MatchString(msg)
 }
 
 // startQueue processes the send queue sequentially with rate limiting.
@@ -150,7 +285,9 @@ func (h *Handler) startQueue() {
 				h.getChatWorker(chatId) <- req
 
 			case callback := <-h.callbackAckQueue:
-				h.bot.Respond(callback, &telebot.CallbackResponse{})
+				if bot := h.getBot(int64(callback.Sender.ID)); bot != nil {
+					bot.Respond(callback, &telebot.CallbackResponse{})
+				}
 			}
 		}
 	}()

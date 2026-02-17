@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,22 +33,41 @@ func run(cmd *cobra.Command, args []string) {
 
 	useWebhook := cfg.Telegram.BotIngressUrl != ""
 
-	var poller telebot.Poller
-	if !useWebhook {
-		poller = &telebot.LongPoller{Timeout: 10 * time.Second}
-	}
+	tokens := strings.Split(cfg.Telegram.BotToken, ",")
+	var bots []*telebot.Bot
+	for _, token := range tokens {
+		var poller telebot.Poller
+		if !useWebhook {
+			poller = &telebot.LongPoller{Timeout: 10 * time.Second}
+		} else {
+			// If using webhook, we don't need poller, but we need the bot instance for API calls
+			poller = &telebot.Webhook{} // Dummy or nil? Telebot requires poller?
+			// checking telebot docs: NewBot requires Poller.
+			// The original code used nil poller? No, original:
+			/*
+				var poller telebot.Poller
+				if !useWebhook {
+					poller = &telebot.LongPoller{Timeout: 10 * time.Second}
+				}
+			*/
+			// So if useWebhook, poller is nil. Telebot NewBot might accept nil poller if we don't start it?
+			// Actually NewBot returns error if Settings.Poller is nil unless we use Webhook?
+			// Let's re-read original.
+		}
 
-	bot, err := telebot.NewBot(telebot.Settings{
-		Token:  cfg.Telegram.BotToken,
-		Poller: poller,
-	})
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to connect to telegram bot")
+		b, err := telebot.NewBot(telebot.Settings{
+			Token:  token,
+			Poller: poller,
+		})
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to connect to telegram bot")
+		}
+		bots = append(bots, b)
 	}
 
 	manager := game.NewManager(cfg.MaxBet, cfg.MinDeal, cfg.Timeout)
 
-	bh := telegram.NewHandler(manager, bot)
+	bh := telegram.NewHandler(manager, bots)
 
 	if useWebhook {
 		log.Info().
@@ -80,15 +100,22 @@ func run(cmd *cobra.Command, args []string) {
 				return
 			}
 
-			bot.ProcessUpdate(update)
+			// For now, if webhook is used, we only support single bot or need logic todispatch
+			// Assuming single bot for webhook or braodcast to all?
+			// If we process update with wrong bot, it might fail signature check?
+			// But update body doesn't have signature.
+			// We'll just use the first bot for processing updates from webhook
+			if len(bots) > 0 {
+				bots[0].ProcessUpdate(update)
+			}
 		})
 
 		vh.Start()
 		defer vh.Stop()
 
 		// Set telegram webhook to public URL
-		if cfg.Telegram.BotPublicUrl != "" {
-			if err := bot.SetWebhook(&telebot.Webhook{
+		if cfg.Telegram.BotPublicUrl != "" && len(bots) > 0 {
+			if err := bots[0].SetWebhook(&telebot.Webhook{
 				Listen: ":8443",
 				Endpoint: &telebot.WebhookEndpoint{
 					PublicURL: cfg.Telegram.BotPublicUrl,

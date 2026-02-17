@@ -80,8 +80,10 @@ var (
 )
 
 func (h *Handler) Setup() error {
-	if err := h.bot.SetCommands(commands); err != nil {
-		return err
+	for _, bot := range h.bots {
+		if err := bot.SetCommands(commands); err != nil {
+			return err
+		}
 	}
 
 	if err := h.game.LoadFromStorage(); err != nil {
@@ -97,31 +99,31 @@ func (h *Handler) Setup() error {
 	h.game.OnPlayerPlay(h.onPlayerPlay)
 	h.game.OnGameFinish(h.onGameFinish)
 
-	h.bot.Handle("/start", h.CmdStart)
-	h.bot.Handle("/newroom", h.CmdNewRoom)
-	h.bot.Handle("/newgame", h.CmdNewGame)
-	h.bot.Handle("/join", h.CmdJoinRoom)
-	h.bot.Handle("/leave", h.CmdLeaveRoom)
-	h.bot.Handle("/endgame", h.CmdEndGame)
-	h.bot.Handle("/save", h.CmdSave)
-	h.bot.Handle("/room", h.CmdRoomInfo)
-	h.bot.Handle("/rooms", h.CmdListRoom)
-	h.bot.Handle("/pass", h.CmdPass)
-	h.bot.Handle("/status", h.CmdStatus)
-	h.bot.Handle("/rules", h.CmdListRules)
-	h.bot.Handle("/setrule", h.CmdSetRule)
-	h.bot.Handle("/admin", h.CmdAdmin)
-	h.bot.Handle("/seticon", h.CmdSetIcon)
-	h.bot.Handle("/stats", h.CmdStats)
-	h.bot.Handle("/transfer", h.CmdTransfer)
+	h.handle("/start", h.CmdStart)
+	h.handle("/newroom", h.CmdNewRoom)
+	h.handle("/newgame", h.CmdNewGame)
+	h.handle("/join", h.CmdJoinRoom)
+	h.handle("/leave", h.CmdLeaveRoom)
+	h.handle("/endgame", h.CmdEndGame)
+	h.handle("/save", h.CmdSave)
+	h.handle("/room", h.CmdRoomInfo)
+	h.handle("/rooms", h.CmdListRoom)
+	h.handle("/pass", h.CmdPass)
+	h.handle("/status", h.CmdStatus)
+	h.handle("/rules", h.CmdListRules)
+	h.handle("/setrule", h.CmdSetRule)
+	h.handle("/admin", h.CmdAdmin)
+	h.handle("/seticon", h.CmdSetIcon)
+	h.handle("/stats", h.CmdStats)
+	h.handle("/transfer", h.CmdTransfer)
 
-	h.bot.Handle(telebot.OnQuery, func(q *telebot.Query) {
+	h.handle(telebot.OnQuery, func(q *telebot.Query) {
 		log.Info().Interface("q", q).Msg("on query")
 	})
 
-	h.bot.Handle(telebot.OnCallback, h.onCallback)
+	h.handle(telebot.OnCallback, h.onCallback)
 
-	h.bot.Handle(telebot.OnText, func(m *telebot.Message) {
+	h.handle(telebot.OnText, func(m *telebot.Message) {
 		log.Info().Msg(m.Text + " " + GetUsername(m.Chat))
 		p := h.joinServer(m)
 		if r := p.CurrentRoom(); r != nil {
@@ -134,12 +136,35 @@ func (h *Handler) Setup() error {
 		}
 	})
 
-	h.bot.Handle(telebot.OnSticker, h.onMedia)
-	h.bot.Handle(telebot.OnPhoto, h.onMedia)
-	h.bot.Handle(telebot.OnVideo, h.onMedia)
-	h.bot.Handle(telebot.OnAnimation, h.onMedia)
+	h.handle(telebot.OnSticker, h.onMedia)
+	h.handle(telebot.OnPhoto, h.onMedia)
+	h.handle(telebot.OnVideo, h.onMedia)
+	h.handle(telebot.OnAnimation, h.onMedia)
 
 	return nil
+}
+
+func (h *Handler) handle(endpoint interface{}, handler interface{}) {
+	for i, bot := range h.bots {
+		idx := i
+		switch f := handler.(type) {
+		case func(*telebot.Message):
+			bot.Handle(endpoint, func(m *telebot.Message) {
+				h.userBotMap.Store(m.Chat.ID, idx)
+				f(m)
+			})
+		case func(*telebot.Callback):
+			bot.Handle(endpoint, func(c *telebot.Callback) {
+				h.userBotMap.Store(int64(c.Sender.ID), idx)
+				f(c)
+			})
+		case func(*telebot.Query):
+			bot.Handle(endpoint, func(q *telebot.Query) {
+				h.userBotMap.Store(int64(q.From.ID), idx)
+				f(q)
+			})
+		}
+	}
 }
 
 func (h *Handler) Start() (err error) {
@@ -153,7 +178,9 @@ func (h *Handler) Start() (err error) {
 		return
 	}
 
-	h.bot.Start()
+	for _, bot := range h.bots {
+		go bot.Start()
+	}
 	return
 }
 
