@@ -237,13 +237,14 @@ func (h *Handler) onPlayerJoinRoom(r *game.Room, p *game.Player) {
 }
 
 func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
-	msg := "📢 Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
 	if p != nil {
 		// Update the acting player immediately
+		msg := "📢 Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
 		h.broadcastDeal([]*game.Player{p.Player}, msg, true, MakeBetButtons(g)...)
 	}
 
 	go func() {
+		msg := "📢 Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
 		dealer := g.Dealer()
 		h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, MakeDealerPrepareButtons(g)...)
 
