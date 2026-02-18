@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cast"
 	"gopkg.in/tucnak/telebot.v2"
 
+	"golang.org/x/time/rate"
+
 	"github.com/psucodervn/verixilac/internal/game"
 	"github.com/psucodervn/verixilac/internal/stringer"
 )
@@ -20,6 +22,7 @@ type Handler struct {
 
 	userBotMap   sync.Map // int64 -> int (bot index)
 	botUsernames []string // cached usernames for notification
+	botLimiters  []*rate.Limiter
 
 	gameMessages    sync.Map
 	dealMessages    sync.Map
@@ -34,6 +37,11 @@ type Handler struct {
 	mu sync.RWMutex
 }
 
+type SentMessage struct {
+	Message *telebot.Message
+	BotIdx  int
+}
+
 func NewHandler(manager *game.Manager, bots []*telebot.Bot) *Handler {
 	h := &Handler{
 		game:             manager,
@@ -43,8 +51,10 @@ func NewHandler(manager *game.Manager, bots []*telebot.Bot) *Handler {
 	}
 
 	h.botUsernames = make([]string, len(bots))
+	h.botLimiters = make([]*rate.Limiter, len(bots))
 	for i, b := range bots {
 		h.botUsernames[i] = b.Me.Username
+		h.botLimiters[i] = rate.NewLimiter(rate.Limit(rateLimitMessagePerSecondGlobal), 10)
 	}
 
 	h.startQueue()
@@ -142,7 +152,7 @@ func (h *Handler) doDeal(m *telebot.Message, onQuery bool) {
 			if !pg.IsDone() {
 				continue
 			}
-			msg := fmt.Sprintf("🃏 Bài của %s: %s\n%s đã thắng %d🍂 🏆",
+			msg := fmt.Sprintf("🃏 Bài của %s: %s\n%s đã thắng %d💩 🏆",
 				game.EscapeMarkdown(pg.IconName()), pg.Cards().String(false, false),
 				game.EscapeMarkdown(pg.IconName()), pg.Reward())
 			h.broadcast(g.AllPlayers(), msg, false)
@@ -228,15 +238,21 @@ func (h *Handler) onPlayerJoinRoom(r *game.Room, p *game.Player) {
 
 func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
 	msg := "📢 Bắt đầu ván mới, hãy tham gia ngay!\n\n" + g.PreparingBoard()
-	// Update the acting player immediately
-	h.broadcastDeal([]*game.Player{p.Player}, msg, true, MakeBetButtons(g)...)
+	if p != nil {
+		// Update the acting player immediately
+		h.broadcastDeal([]*game.Player{p.Player}, msg, true, MakeBetButtons(g)...)
+	}
 
 	go func() {
 		dealer := g.Dealer()
 		h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, MakeDealerPrepareButtons(g)...)
 
 		r := g.Room()
-		players := FilterPlayers(r.Players(), dealer.ID(), p.ID())
+		exclude := []string{dealer.ID()}
+		if p != nil {
+			exclude = append(exclude, p.ID())
+		}
+		players := FilterPlayers(r.Players(), exclude...)
 		h.broadcastDeal(players, msg, true, MakeBetButtons(g)...)
 	}()
 }
@@ -340,7 +356,7 @@ func (h *Handler) doHit(m *telebot.Message, onQuery bool) bool {
 // joinServer check and register user
 func (h *Handler) joinServer(m *telebot.Message) *game.Player {
 	id := cast.ToString(m.Chat.ID)
-	name := GetUsername(m.Chat)
+	name := h.GetUsername(m.Chat)
 	return h.game.PlayerRegister(h.ctx(m), id, name)
 }
 
@@ -398,11 +414,11 @@ func (h *Handler) doCompare(m *telebot.Message, onQuery bool) {
 
 	var msgPlayer string
 	if reward < 0 {
-		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %d🍂", game.EscapeMarkdown(to.IconName()), -reward)
-		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %d🍂", -reward)
+		msgDealer += fmt.Sprintf("\n%s thắng và được cộng %d💩", game.EscapeMarkdown(to.IconName()), -reward)
+		msgPlayer = fmt.Sprintf("🤑 Cái lật bài bạn và thua. Bạn được cộng %d💩", -reward)
 	} else if reward > 0 {
-		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %d🍂", game.EscapeMarkdown(to.IconName()), reward)
-		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d🍂", reward)
+		msgDealer += fmt.Sprintf("\n%s thua và bị trừ %d💩", game.EscapeMarkdown(to.IconName()), reward)
+		msgPlayer = fmt.Sprintf("🔻 Cái lật bài bạn và thắng. Bạn bị trừ %d💩", reward)
 	} else {
 		msgDealer += fmt.Sprintf("\n🤝 %s và cái hoà nhau", game.EscapeMarkdown(to.IconName()))
 		msgPlayer = "🤝 Cái lật bài bạn và hoà. Bạn không bị mất tiền"
@@ -448,12 +464,8 @@ func (h *Handler) sendChat(receivers []*game.Player, msg string) {
 	}
 }
 
-func (h *Handler) sendMedia(receivers []*game.Player, what interface{}, options *telebot.SendOptions, fromBotIdx int) {
+func (h *Handler) sendMedia(receivers []*game.Player, what interface{}, options *telebot.SendOptions) {
 	for _, p := range receivers {
-		if fromBotIdx >= 0 {
-			h.botSendFixed(ToTelebotChat(p.ID()), what, options, fromBotIdx)
-		} else {
-			h.botSend(ToTelebotChat(p.ID()), what, options)
-		}
+		h.botSend(ToTelebotChat(p.ID()), what, options)
 	}
 }

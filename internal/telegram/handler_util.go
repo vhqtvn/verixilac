@@ -42,8 +42,9 @@ type botRequest struct {
 }
 
 type botResponse struct {
-	msg *telebot.Message
-	err error
+	msg    *telebot.Message
+	err    error
+	botIdx int
 }
 
 const (
@@ -182,6 +183,11 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 			retryCount := 0
 			var chatReq *telebot.Chat
 			for {
+				// Global rate limit per bot
+				if botIdx >= 0 && botIdx < len(h.botLimiters) {
+					_ = h.botLimiters[botIdx].Wait(context.Background())
+				}
+
 				switch req.reqType {
 				case botRequestSend:
 					chatReq = req.chat
@@ -213,18 +219,20 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 
 				// Check for 429 Retry After
 				if matches := retryAfterRegex.FindStringSubmatch(err.Error()); len(matches) > 1 {
-					milliseconds, _ := strconv.Atoi(matches[1])
-					log.Warn().Int("bot_idx", botIdx).Str("user", GetUsername(chatReq)).Int("milliseconds", milliseconds).Msg("telegram rate limit, sleeping")
-
-					if milliseconds < 3000 {
-						time.Sleep(time.Duration(milliseconds) * time.Millisecond)
+					seconds, _ := strconv.Atoi(matches[1])
+					if seconds < 5 {
+						log.Warn().Int("bot_idx", botIdx).Str("user", h.GetUsername(chatReq)).Int("seconds", seconds).Msg("telegram rate limit, sleeping")
+						time.Sleep(time.Duration(seconds) * time.Second)
 						continue
-					}
+					} else {
+						log.Warn().Int("bot_idx", botIdx).Str("user", h.GetUsername(chatReq)).Int("seconds", seconds).Msg("telegram rate limit, switch to next bot")
+						h.notifySwitchBots(int64(chatID), botIdx)
 
-					// If rate limited, we can try switching bot immediately in outer loop?
-					// Yes, break inner loop and let outer loop try next bot.
-					// But we should NOT increment retryCount here as it's a "soft" failure for this bot.
-					break
+						// If rate limited, we can try switching bot immediately in outer loop?
+						// Yes, break inner loop and let outer loop try next bot.
+						// But we should NOT increment retryCount here as it's a "soft" failure for this bot.
+						break
+					}
 				}
 
 				// Check for Forbidden/Unauthorized - these are permanent for this bot
@@ -234,11 +242,11 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 				}
 				// Simple string check is robust enough for standard telegram errors
 				if isPermanentError(errMsg) {
-					log.Warn().Int("bot_idx", botIdx).Str("user", GetUsername(chatReq)).Err(err).Msg("bot failed permanently, switching")
+					log.Warn().Int("bot_idx", botIdx).Str("user", h.GetUsername(chatReq)).Err(err).Msg("bot failed permanently, switching")
 					break // break inner loop, try next bot
 				}
 
-				log.Err(err).Interface("what", req.what).Str("user", GetUsername(chatReq)).Int("type", int(req.reqType)).Msg("bot request failed")
+				log.Err(err).Interface("what", req.what).Str("user", h.GetUsername(chatReq)).Int("type", int(req.reqType)).Msg("bot request failed")
 				retryCount++
 				if retryCount >= 3 {
 					break // break inner loop, try next bot
@@ -256,7 +264,7 @@ func (h *Handler) runChatWorker(chatID uint64, ch chan *botRequest) {
 		}
 
 		if req.result != nil {
-			req.result <- botResponse{msg: m, err: err}
+			req.result <- botResponse{msg: m, err: err, botIdx: currentBotIndex}
 		}
 	}
 }
@@ -365,7 +373,7 @@ func (h *Handler) botEditReplyMarkup(m *telebot.Message, markup *telebot.ReplyMa
 // --- Sync API (blocks until result) ---
 
 // botSendSync enqueues a send and waits for the result.
-func (h *Handler) botSendSync(chat *telebot.Chat, what interface{}, options *telebot.SendOptions) (*telebot.Message, error) {
+func (h *Handler) botSendSync(chat *telebot.Chat, what interface{}, options *telebot.SendOptions) (*telebot.Message, error, int) {
 	ch := make(chan botResponse, 1)
 	h.sendQueue <- &botRequest{
 		reqType:     botRequestSend,
@@ -376,11 +384,11 @@ func (h *Handler) botSendSync(chat *telebot.Chat, what interface{}, options *tel
 		fixedBotIdx: -1,
 	}
 	res := <-ch
-	return res.msg, res.err
+	return res.msg, res.err, res.botIdx
 }
 
 // botEditSync enqueues an edit and waits for the result.
-func (h *Handler) botEditSync(editKey string, m *telebot.Message, what interface{}, options *telebot.SendOptions) (*telebot.Message, error) {
+func (h *Handler) botEditSync(editKey string, m *telebot.Message, what interface{}, options *telebot.SendOptions, fixedBotIdx int) (*telebot.Message, error, int) {
 	ch := make(chan botResponse, 1)
 	req := &botRequest{
 		reqType:     botRequestEdit,
@@ -389,14 +397,14 @@ func (h *Handler) botEditSync(editKey string, m *telebot.Message, what interface
 		options:     options,
 		editKey:     editKey,
 		result:      ch,
-		fixedBotIdx: -1,
+		fixedBotIdx: fixedBotIdx,
 	}
 	if editKey != "" {
 		h.editLatest.Store(editKey, req)
 	}
 	h.sendQueue <- req
 	res := <-ch
-	return res.msg, res.err
+	return res.msg, res.err, res.botIdx
 }
 
 // --- High-level helpers (use the queue internally) ---
@@ -404,7 +412,7 @@ func (h *Handler) botEditSync(editKey string, m *telebot.Message, what interface
 func (h *Handler) ctx(m *telebot.Message) context.Context {
 	l := log.Logger.With().
 		Int64("id", m.Chat.ID).
-		Str("user", GetUsername(m.Chat)).
+		Str("user", h.GetUsername(m.Chat)).
 		Logger()
 	return l.WithContext(context.Background())
 }
@@ -482,22 +490,35 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 					// Update existing message
 					h.lastMessageType.Store(p.ID(), messageTypeNormal)
 
-					editKey := fmt.Sprintf("game:%s", p.ID())
-					m, err := h.botEditSync(editKey, pm.(*telebot.Message), msg, options)
-					if err != nil {
-						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
-					} else if m != nil {
-						h.gameMessages.Store(p.ID(), m)
+					var msgToEdit *telebot.Message
+					var botIdx = -1
+
+					switch v := pm.(type) {
+					case SentMessage:
+						msgToEdit = v.Message
+						botIdx = v.BotIdx
+					case *telebot.Message:
+						msgToEdit = v
+					}
+
+					if msgToEdit != nil {
+						editKey := fmt.Sprintf("game:%s", p.ID())
+						m, err, idx := h.botEditSync(editKey, msgToEdit, msg, options, botIdx)
+						if err != nil {
+							log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
+						} else if m != nil {
+							h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+						}
 					}
 				} else {
 					// Sending new message (either forced or because last message was a log)
 					h.lastMessageType.Store(p.ID(), messageTypeNormal)
 
-					m, err := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
+					m, err, idx := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
 					if err != nil {
 						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 					} else if m != nil {
-						h.gameMessages.Store(p.ID(), m)
+						h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
 					}
 				}
 			} else {
@@ -505,11 +526,11 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 				// Sending new message
 				h.lastMessageType.Store(p.ID(), messageTypeNormal)
 
-				m, err := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
+				m, err, idx := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 				} else if m != nil {
-					h.gameMessages.Store(p.ID(), m)
+					h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
 				}
 			}
 		}()
@@ -550,34 +571,46 @@ func (h *Handler) broadcastLog(receivers interface{}, msg string) {
 
 			if ok && pm != nil && lastType == messageTypeLog {
 				// Append to previous message
-				prevMsg := pm.(*telebot.Message)
-				newText := prevMsg.Text + "\n" + msg
+				var prevMsg *telebot.Message
+				var botIdx = -1
 
-				// We don't store new message object because ID stays same, content changes.
-				// But we need to update the Text in our stored copy if we want to append again?
-				// botEditSync returns the edited message.
+				switch v := pm.(type) {
+				case SentMessage:
+					prevMsg = v.Message
+					botIdx = v.BotIdx
+				case *telebot.Message:
+					prevMsg = v
+				}
 
-				editKey := fmt.Sprintf("game:%s", p.ID())
-				// Use nil options to keep existing markup if any?
-				// Usually logs don't have markup.
-				m, err := h.botEditSync(editKey, prevMsg, newText, nil)
-				if err != nil {
-					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("append log failed")
-					// If edit fails (e.g. message too old), fall back to send?
-					// For now just log error.
-				} else if m != nil {
-					h.gameMessages.Store(p.ID(), m)
+				if prevMsg != nil {
+					newText := prevMsg.Text + "\n" + msg
+
+					// We don't store new message object because ID stays same, content changes.
+					// But we need to update the Text in our stored copy if we want to append again?
+					// botEditSync returns the edited message.
+
+					editKey := fmt.Sprintf("game:%s", p.ID())
+					// Use nil options to keep existing markup if any?
+					// Usually logs don't have markup.
+					m, err, idx := h.botEditSync(editKey, prevMsg, newText, nil, botIdx)
+					if err != nil {
+						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("append log failed")
+						// If edit fails (e.g. message too old), fall back to send?
+						// For now just log error.
+					} else if m != nil {
+						h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+					}
 				}
 			} else {
 				// Send as new message
 				h.lastMessageType.Store(p.ID(), messageTypeLog)
 
 				options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdown}
-				m, err := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
+				m, err, idx := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send log failed")
 				} else if m != nil {
-					h.gameMessages.Store(p.ID(), m)
+					h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
 				}
 			}
 		}()
@@ -605,19 +638,32 @@ func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, b
 
 			pm, ok := h.dealMessages.Load(p.ID())
 			if edit && ok && pm != nil {
-				editKey := fmt.Sprintf("deal:%s", p.ID())
-				m, err := h.botEditSync(editKey, pm.(*telebot.Message), msg, options)
-				if err != nil {
-					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
-				} else if m != nil {
-					h.dealMessages.Store(p.ID(), m)
+				var msgToEdit *telebot.Message
+				var botIdx = -1
+
+				switch v := pm.(type) {
+				case SentMessage:
+					msgToEdit = v.Message
+					botIdx = v.BotIdx
+				case *telebot.Message:
+					msgToEdit = v
+				}
+
+				if msgToEdit != nil {
+					editKey := fmt.Sprintf("deal:%s", p.ID())
+					m, err, idx := h.botEditSync(editKey, msgToEdit, msg, options, botIdx)
+					if err != nil {
+						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
+					} else if m != nil {
+						h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+					}
 				}
 			} else {
-				m, err := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
+				m, err, idx := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 				} else if m != nil {
-					h.dealMessages.Store(p.ID(), m)
+					h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
 				}
 			}
 		}()
@@ -642,4 +688,30 @@ func (h *Handler) findPlayerInGame(m *telebot.Message, gameID string, playerID s
 
 type Playable interface {
 	ID() string
+}
+
+func (h *Handler) GetUsername(chat *telebot.Chat) string {
+	if chat == nil {
+		return "<nil>"
+	}
+	name := strings.TrimSpace(chat.FirstName + " " + chat.LastName)
+	if len(name) == 0 {
+		name = strings.TrimSpace(chat.Username)
+	}
+
+	// Fallback to DB if name is empty
+	if len(name) == 0 {
+		// Try to find player in DB
+		// Note: we can't use h.ctx(m) here because h.ctx uses GetUsername!
+		// So we use background context.
+		p := h.game.FindPlayer(context.Background(), fmt.Sprintf("%v", chat.ID))
+		if p != nil {
+			name = p.Name()
+		}
+	}
+
+	if len(name) == 0 {
+		name = fmt.Sprintf("%v", chat.ID)
+	}
+	return name
 }

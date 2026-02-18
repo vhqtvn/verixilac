@@ -1,9 +1,6 @@
 package telegram
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/spf13/cast"
 	"gopkg.in/tucnak/telebot.v2"
 
@@ -20,17 +17,6 @@ func ToTelebotChats(ids ...string) []*telebot.Chat {
 
 func ToTelebotChat(id string) *telebot.Chat {
 	return &telebot.Chat{ID: cast.ToInt64(id)}
-}
-
-func GetUsername(chat *telebot.Chat) string {
-	name := strings.TrimSpace(chat.FirstName + " " + chat.LastName)
-	if len(name) == 0 {
-		name = strings.TrimSpace(chat.Username)
-	}
-	if len(name) == 0 {
-		name = fmt.Sprintf("%v", chat.ID)
-	}
-	return name
 }
 
 func FilterPlayers(players []*game.Player, ids ...string) []*game.Player {
