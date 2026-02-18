@@ -34,6 +34,8 @@ type Handler struct {
 
 	editLatest sync.Map // editKey -> *botRequest for dedup
 
+	playerLocks sync.Map // playerID -> *sync.Mutex
+
 	mu sync.RWMutex
 }
 
@@ -42,6 +44,7 @@ type SentMessage struct {
 	BotIdx  int
 	Text    string
 	Buttons []InlineButton
+	Version uint32
 }
 
 func NewHandler(manager *game.Manager, bots []*telebot.Bot) *Handler {
@@ -133,7 +136,7 @@ func (h *Handler) doDeal(m *telebot.Message, onQuery bool) {
 		return
 	}
 
-	h.broadcastDeal(g.Room().Players(), "🔒 *Chốt deal*:\n\n"+g.PreparingBoardMarkdownV2(), true)
+	h.broadcastDeal(g.Room().Players(), "🔒 *Chốt deal*:\n\n"+g.PreparingBoardMarkdownV2(), true, 0)
 
 	// send cards
 	for _, pg := range g.Players() {
@@ -228,12 +231,12 @@ func (h *Handler) onNewGame(r *game.Room, g *game.Game) {
 
 	// send to dealer
 	d := g.Dealer()
-	h.broadcastDeal([]*game.Player{d.Player}, msg, false, MakeDealerPrepareButtons(g)...)
+	h.broadcastDeal([]*game.Player{d.Player}, msg, false, 0, MakeDealerPrepareButtons(g)...)
 
 	// send to members
 	go func() {
 		players := FilterPlayers(r.Players(), d.ID())
-		h.broadcastDeal(players, msg, false, MakeBetButtons(g)...)
+		h.broadcastDeal(players, msg, false, 0, MakeBetButtons(g)...)
 	}()
 }
 
@@ -246,13 +249,13 @@ func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
 	if p != nil {
 		// Update the acting player immediately
 		msg := newGameMsgMarkdownV2(g)
-		h.broadcastDeal([]*game.Player{p.Player}, msg, true, MakeBetButtons(g)...)
+		h.broadcastDeal([]*game.Player{p.Player}, msg, true, g.BetStatusVersion(), MakeBetButtons(g)...)
 	}
 
 	go func() {
 		msg := newGameMsgMarkdownV2(g)
 		dealer := g.Dealer()
-		h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, MakeDealerPrepareButtons(g)...)
+		h.broadcastDeal([]*game.Player{dealer.Player}, msg, true, g.BetStatusVersion(), MakeDealerPrepareButtons(g)...)
 
 		r := g.Room()
 		exclude := []string{dealer.ID()}
@@ -260,7 +263,7 @@ func (h *Handler) onPlayerBet(g *game.Game, p *game.PlayerInGame) {
 			exclude = append(exclude, p.ID())
 		}
 		players := FilterPlayers(r.Players(), exclude...)
-		h.broadcastDeal(players, msg, true, MakeBetButtons(g)...)
+		h.broadcastDeal(players, msg, true, g.BetStatusVersion(), MakeBetButtons(g)...)
 	}()
 }
 

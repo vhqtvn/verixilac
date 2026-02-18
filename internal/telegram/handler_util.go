@@ -57,6 +57,11 @@ const (
 	messageTypeLog    = 1
 )
 
+func (h *Handler) getPlayerMutex(id string) *sync.Mutex {
+	v, _ := h.playerLocks.LoadOrStore(id, &sync.Mutex{})
+	return v.(*sync.Mutex)
+}
+
 func (h *Handler) getChatWorker(chatID uint64) chan *botRequest {
 	// fast path
 	if ch, ok := h.chatWorkers.Load(chatID); ok {
@@ -627,7 +632,7 @@ func (h *Handler) broadcastLog(receivers interface{}, msg string) {
 
 }
 
-func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, buttons ...InlineButton) {
+func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, version uint32, buttons ...InlineButton) {
 	options := &telebot.SendOptions{
 		ParseMode: telebot.ModeMarkdownV2,
 		ReplyMarkup: &telebot.ReplyMarkup{
@@ -643,12 +648,17 @@ func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, b
 		go func() {
 			defer wg.Done()
 
+			lock := h.getPlayerMutex(p.ID())
+			lock.Lock()
+			defer lock.Unlock()
+
 			pm, ok := h.dealMessages.Load(p.ID())
 			if edit && ok && pm != nil {
 				var msgToEdit *telebot.Message
 				var botIdx = -1
 				var lastText string
 				var lastButtons []InlineButton
+				var lastVersion uint32
 
 				switch v := pm.(type) {
 				case SentMessage:
@@ -656,12 +666,22 @@ func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, b
 					botIdx = v.BotIdx
 					lastText = v.Text
 					lastButtons = v.Buttons
+					lastVersion = v.Version
 				case *telebot.Message:
 					msgToEdit = v
 				}
 
 				if msgToEdit != nil {
+					if version > 0 && version < lastVersion {
+						// Outdated update, skip
+						return
+					}
+
 					if lastText == msg && ButtonsEqual(lastButtons, buttons) {
+						// Content identical, just update version if needed
+						if version > lastVersion {
+							h.dealMessages.Store(p.ID(), SentMessage{Message: msgToEdit, BotIdx: botIdx, Text: lastText, Buttons: lastButtons, Version: version})
+						}
 						return
 					}
 					editKey := fmt.Sprintf("deal:%s", p.ID())
@@ -669,15 +689,18 @@ func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, b
 					if err != nil {
 						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 					} else if m != nil {
-						h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons})
+						h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons, Version: version})
 					}
 				}
 			} else {
+				// For new message, we don't check version against previous one strictly,
+				// but we might want to respect if there was a logically newer message?
+				// But "new message" usually means start of something or reset.
 				m, err, idx := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 				} else if m != nil {
-					h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons})
+					h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons, Version: version})
 				}
 			}
 		}()

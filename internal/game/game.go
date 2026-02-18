@@ -13,17 +13,18 @@ import (
 )
 
 type Game struct {
-	id         string
-	room       *Room
-	dealer     *PlayerInGame
-	rule       *Rule
-	players    []*PlayerInGame
-	table      []Card
-	status     atomic.Uint32
-	doneCnt    atomic.Uint32
-	maxBet     atomic.Uint64
-	timeout    atomic.Duration
-	currentIdx int
+	id               string
+	room             *Room
+	dealer           *PlayerInGame
+	rule             *Rule
+	players          []*PlayerInGame
+	table            []Card
+	status           atomic.Uint32
+	doneCnt          atomic.Uint32
+	maxBet           atomic.Uint64
+	timeout          atomic.Duration
+	betStatusVersion atomic.Uint32
+	currentIdx       int
 
 	onPlayerPlayFunc func(pg *PlayerInGame)
 
@@ -73,6 +74,10 @@ func (g *Game) ID() string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.id
+}
+
+func (g *Game) BetStatusVersion() uint32 {
+	return g.betStatusVersion.Load()
 }
 
 func (g *Game) Dealer() *PlayerInGame {
@@ -146,6 +151,7 @@ func (g *Game) PlayerBet(p *Player, betAmount uint64) (*PlayerInGame, error) {
 		return nil, fmt.Errorf("bạn chỉ được bet tối đa %d🌷", g.maxBet.Load())
 	}
 	pg.AddBet(betAmount)
+	g.betStatusVersion.Inc()
 	return pg, nil
 }
 
@@ -279,6 +285,7 @@ func (g *Game) RemovePlayer(id string) error {
 			continue
 		}
 		g.players = append(g.players[:i], g.players[i+1:]...)
+		g.betStatusVersion.Inc()
 		return nil
 	}
 	return ErrPlayerNotFound
