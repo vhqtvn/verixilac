@@ -75,9 +75,9 @@ func (h *Handler) doDeposit(m *telebot.Message, operator *game.Player, ss []stri
 		Str("recipient_id", p.ID()).
 		Int64("amount", amount).Msg("deposit")
 
-	msg := fmt.Sprintf("💰%s đã bơm vào %d💩.", p.Name(), amount)
+	msg := fmt.Sprintf("💰%s đã bơm vào %d🌷.", p.Name(), amount)
 	if amount < 0 {
-		msg = fmt.Sprintf("💸 %s đã rút ra %d💩.", p.Name(), -amount)
+		msg = fmt.Sprintf("💸 %s đã rút ra %d🌷.", p.Name(), -amount)
 	}
 	h.broadcast(h.game.Players(), msg, false)
 }

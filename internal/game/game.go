@@ -131,7 +131,7 @@ func (g *Game) PlayerBet(p *Player, betAmount uint64) (*PlayerInGame, error) {
 	}
 
 	if betAmount > g.maxBet.Load() {
-		return nil, fmt.Errorf("bạn chỉ được bet tối đa %d💩", g.maxBet.Load())
+		return nil, fmt.Errorf("bạn chỉ được bet tối đa %d🌷", g.maxBet.Load())
 	}
 
 	pg := g.FindPlayer(p.ID())
@@ -143,7 +143,7 @@ func (g *Game) PlayerBet(p *Player, betAmount uint64) (*PlayerInGame, error) {
 	}
 
 	if pg.BetAmount()+betAmount > g.maxBet.Load() {
-		return nil, fmt.Errorf("bạn chỉ được bet tối đa %d💩", g.maxBet.Load())
+		return nil, fmt.Errorf("bạn chỉ được bet tối đa %d🌷", g.maxBet.Load())
 	}
 	pg.AddBet(betAmount)
 	return pg, nil
@@ -157,12 +157,12 @@ func (g *Game) PreparingBoard() string {
 	r := g.Rule()
 	bf.WriteString("🎲 *Sòng Xì Lác* 🎲\n\n")
 	bf.WriteString(fmt.Sprintf("👑 *Nhà cái*: %s (Rule: %s)\n", EscapeMarkdown(g.dealer.IconName()), EscapeMarkdown(r.Name)))
-	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d💩):", len(g.players), g.totalBetAmount()))
+	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d🌷):", len(g.players), g.totalBetAmount()))
 	if len(g.players) == 0 {
 		bf.WriteString("\n_(chưa có ai)_")
 	} else {
 		for _, p := range g.players {
-			bf.WriteString(fmt.Sprintf("\n  • %s: %d💩", EscapeMarkdown(p.IconName()), p.BetAmount()))
+			bf.WriteString(fmt.Sprintf("\n  • %s: %d🌷", EscapeMarkdown(p.IconName()), p.BetAmount()))
 		}
 	}
 	return bf.String()
@@ -174,7 +174,7 @@ func (g *Game) CurrentBoard() string {
 
 	bf := bytes.NewBuffer(nil)
 	bf.WriteString(fmt.Sprintf("👑 *Nhà cái*: %s\n", g.dealer.CardsString()))
-	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d💩):", len(g.players), g.totalBetAmount()))
+	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d🌷):", len(g.players), g.totalBetAmount()))
 	if len(g.players) == 0 {
 		bf.WriteString("\n_(chưa có ai)_")
 	} else {
@@ -201,7 +201,7 @@ func (g *Game) ResultBoard() string {
 
 	bf := bytes.NewBuffer(nil)
 	bf.WriteString(fmt.Sprintf("👑 *Nhà cái*: %s\n", g.dealer.Cards().String(false, true)))
-	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d💩):", len(g.players), g.totalBetAmount()))
+	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d🌷):", len(g.players), g.totalBetAmount()))
 	for _, p := range g.players {
 		bf.WriteString(fmt.Sprintf("\n  • %s: %s", EscapeMarkdown(p.IconName()), p.Cards().String(false, false)))
 	}
@@ -216,7 +216,7 @@ func (g *Game) ResultBoard() string {
 	} else if dReward < 0 {
 		dIcon = "🔻"
 	}
-	bf.WriteString(fmt.Sprintf("%s *Nhà cái* (%s): %+d💩 (Bal: %d💩)\n", dIcon, EscapeMarkdown(g.dealer.IconName()), dReward, g.dealer.Balance()))
+	bf.WriteString(fmt.Sprintf("%s *Nhà cái* (%s): %+d🌷 (Bal: %d🌷)\n", dIcon, EscapeMarkdown(g.dealer.IconName()), dReward, g.dealer.Balance()))
 
 	bf.WriteString("*Người chơi*:")
 	for _, p := range g.players {
@@ -227,7 +227,7 @@ func (g *Game) ResultBoard() string {
 		} else if pReward < 0 {
 			pIcon = "🔻"
 		}
-		bf.WriteString(fmt.Sprintf("\n  %s %s: %+d💩 (Bal: %d💩)", pIcon, EscapeMarkdown(p.IconName()), pReward, p.Balance()))
+		bf.WriteString(fmt.Sprintf("\n  %s %s: %+d🌷 (Bal: %d🌷)", pIcon, EscapeMarkdown(p.IconName()), pReward, p.Balance()))
 	}
 	return bf.String()
 }

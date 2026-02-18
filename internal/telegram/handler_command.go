@@ -211,7 +211,7 @@ func (h *Handler) CmdStatus(m *telebot.Message) {
 	msg := fmt.Sprintf(`Thông tin của bạn:
 - ID: %s
 - Name: %s
-- Balance: %d💩
+- Balance: %d🌷
 - Rule: %s (%s)
 `, p.ID(), p.IconName(), p.Balance(), r.ID, r.Name)
 	h.sendMessage(m.Chat, msg)
@@ -299,7 +299,7 @@ func (h *Handler) CmdListRoom(m *telebot.Message) {
 	for _, r := range rooms {
 		bf.WriteString(fmt.Sprintf("Phòng %s:\n", r.ID()))
 		for _, p := range r.Players() {
-			bf.WriteString(fmt.Sprintf(" - %s (%+d💩)\n", p.IconName(), p.Balance()))
+			bf.WriteString(fmt.Sprintf(" - %s (%+d🌷)\n", p.IconName(), p.Balance()))
 		}
 	}
 	h.sendMessage(m.Chat, bf.String())
@@ -449,7 +449,7 @@ func (h *Handler) CmdTransfer(m *telebot.Message) {
 	}
 
 	if p.Balance() < amount {
-		h.sendMessage(m.Chat, fmt.Sprintf("Số dư không đủ. Bạn có %d💩, cần chuyển %d💩", p.Balance(), amount))
+		h.sendMessage(m.Chat, fmt.Sprintf("Số dư không đủ. Bạn có %d🌷, cần chuyển %d🌷", p.Balance(), amount))
 		return
 	}
 
@@ -458,15 +458,15 @@ func (h *Handler) CmdTransfer(m *telebot.Message) {
 	_ = h.game.SaveToStorage()
 
 	if r := p.CurrentRoom(); r != nil {
-		msg := fmt.Sprintf("💸 %s đã chuyển %d💩 cho %s.", p.IconName(), amount, target.IconName())
+		msg := fmt.Sprintf("💸 %s đã chuyển %d🌷 cho %s.", p.IconName(), amount, target.IconName())
 		h.broadcast(r.Players(), msg, false)
 	} else {
-		h.sendMessage(m.Chat, fmt.Sprintf("Đã chuyển %d💩 cho %s. Số dư còn lại: %d💩", amount, target.IconName(), p.Balance()))
+		h.sendMessage(m.Chat, fmt.Sprintf("Đã chuyển %d🌷 cho %s. Số dư còn lại: %d🌷", amount, target.IconName(), p.Balance()))
 
 		// Notify target if they have a chat ID (heuristic: ID matches a chat ID? No, players are users not chats primarily, but usually ID is user ID)
 		targetChatID, err := strconv.ParseInt(target.ID(), 10, 64)
 		if err == nil {
-			h.sendMessage(&telebot.Chat{ID: targetChatID}, fmt.Sprintf("Bạn vừa nhận được %d💩 từ %s.", amount, p.IconName()))
+			h.sendMessage(&telebot.Chat{ID: targetChatID}, fmt.Sprintf("Bạn vừa nhận được %d🌷 từ %s.", amount, p.IconName()))
 		}
 	}
 }
