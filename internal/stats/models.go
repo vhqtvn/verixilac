@@ -194,7 +194,7 @@ func (r *RoleStats) String() string {
 	}
 	sb.WriteString(fmt.Sprintf("  \\- Tổng ván: %d \\(Thắng: %d \\| Thua: %d \\| Hoà: %d\\)\n", r.TotalGames, r.Wins, r.Losses, r.Draws))
 	sb.WriteString(fmt.Sprintf("  \\- Tổng tiền: %s🌷\n", stringer.EscapeMarkdownV2(fmt.Sprintf("%+d", r.TotalMoney))))
-	sb.WriteString(fmt.Sprintf("  \\- Tỷ lệ thắng: %.2f%%\n", winRate))
+	sb.WriteString(fmt.Sprintf("  \\- Tỷ lệ thắng: %s%%\n", stringer.EscapeMarkdownV2(fmt.Sprintf("%.2f", winRate))))
 
 	// Top interesting stats could go here, e.g. "Xì lác: 5, Ngũ linh: 1"
 	keys := make([]string, 0, len(r.HandTypeStats))

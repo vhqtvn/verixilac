@@ -600,11 +600,12 @@ func (h *Handler) broadcastLog(receivers interface{}, msg string) {
 					// We don't store new message object because ID stays same, content changes.
 					// But we need to update the Text in our stored copy if we want to append again?
 					// botEditSync returns the edited message.
+					options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2}
 
 					editKey := fmt.Sprintf("game:%s", p.ID())
 					// Use nil options to keep existing markup if any?
 					// Usually logs don't have markup.
-					m, err, idx := h.botEditSync(editKey, prevMsg, newText, nil, botIdx)
+					m, err, idx := h.botEditSync(editKey, prevMsg, newText, options, botIdx)
 					if err != nil {
 						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("append log failed")
 						// If edit fails (e.g. message too old), fall back to send?
@@ -614,6 +615,7 @@ func (h *Handler) broadcastLog(receivers interface{}, msg string) {
 					}
 				}
 			} else {
+				msg := strings.TrimLeft(msg, "\n")
 				// Send as new message
 				h.lastMessageType.Store(p.ID(), messageTypeLog)
 

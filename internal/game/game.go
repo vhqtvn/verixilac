@@ -231,6 +231,15 @@ func (g *Game) CurrentBoardMarkdownV2() string {
 // 	return bf.String()
 // }
 
+func rewardIcon(reward int64) string {
+	if reward > 0 {
+		return "🤑"
+	} else if reward < 0 {
+		return "🔻"
+	}
+	return "🟰"
+}
+
 func (g *Game) ResultBoardMarkdownV2() string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -246,23 +255,13 @@ func (g *Game) ResultBoardMarkdownV2() string {
 
 	// Dealer result
 	dReward := g.dealer.Reward()
-	dIcon := " "
-	if dReward > 0 {
-		dIcon = "🤑"
-	} else if dReward < 0 {
-		dIcon = "🔻"
-	}
+	dIcon := rewardIcon(dReward)
 	bf.WriteString(fmt.Sprintf("%s *Nhà cái* \\(%s\\): %s🌷 \\(Bal: %s🌷\\)\n", dIcon, EscapeMarkdownV2(g.dealer.IconName()), EscapeMarkdownV2(fmt.Sprintf("%+d", dReward)), EscapeMarkdownV2(fmt.Sprintf("%d", g.dealer.Balance()))))
 
 	bf.WriteString("*Người chơi*:")
 	for _, p := range g.players {
 		pReward := p.Reward()
-		pIcon := " "
-		if pReward > 0 {
-			pIcon = "🤑"
-		} else if pReward < 0 {
-			pIcon = "🔻"
-		}
+		pIcon := rewardIcon(pReward)
 		bf.WriteString(fmt.Sprintf("\n  %s %s: %s🌷 \\(Bal: %s🌷\\)", pIcon, EscapeMarkdownV2(p.IconName()), EscapeMarkdownV2(fmt.Sprintf("%+d", pReward)), EscapeMarkdownV2(fmt.Sprintf("%d", p.Balance()))))
 	}
 	return bf.String()

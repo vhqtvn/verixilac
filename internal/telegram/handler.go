@@ -483,13 +483,13 @@ func (h *Handler) onPlayerPlay(g *game.Game, pg *game.PlayerInGame) {
 		h.broadcast(pg, msg, false, buttons...)
 
 		go func() {
-			h.broadcastLog(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "👉 Tới lượt Nhà Cái")
+			h.broadcastLog(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "\n> 👉 Tới lượt *Nhà Cái*")
 		}()
 		return
 	}
 
 	go func() {
-		h.broadcastLog(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "👉 Tới lượt "+game.EscapeMarkdownV2(pg.IconName()))
+		h.broadcastLog(FilterInGamePlayers(g.AllPlayers(), pg.ID()), "\n> 👉 Tới lượt "+game.EscapeMarkdownV2(pg.IconName()))
 	}()
 
 	h.broadcast(pg, "Tới lượt bạn: "+pg.Cards().String(false, pg.IsDealer()), false, MakePlayerButton(g, pg, false)...)
@@ -516,10 +516,6 @@ func (h *Handler) getDealerDashboard(g *game.Game, dealer *game.PlayerInGame) st
 		sb.WriteString(fmt.Sprintf("\n  • %s %s: %s", game.EscapeMarkdownV2(p.IconName()), game.EscapeMarkdownV2(p.Name()), status))
 	}
 	return sb.String()
-}
-
-func (h *Handler) sendChat(receivers []*game.Player, msg string) {
-	h.sendChatWithOptions(receivers, msg, nil)
 }
 
 func (h *Handler) sendChatWithOptions(receivers []*game.Player, msg string, options *telebot.SendOptions) {
