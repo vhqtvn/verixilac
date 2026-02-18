@@ -1,7 +1,9 @@
 package telegram
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -550,7 +552,33 @@ func (h *Handler) sendMedia(receivers []*game.Player, what interface{}, options 
 			}
 
 			if errURL == nil && mediaURL != "" {
-				// Send using URL via receiver's bot
+				// Try to download and send as file first (reliable for cross-bot)
+				rc, err := h.downloadFile(mediaURL)
+				if err == nil {
+					// We need to close the reader after sending, but botSendFixed is async/queued?
+					// Wait, botSendFixed puts it in a channel. The channel consumer will execute it later.
+					// If we pass an io.Reader here, we must ensure it's still valid when executed.
+					// But http.Response.Body needs to be closed.
+					// If we pass it to telebot, does telebot read it immediately?
+					// No, telebot reads it when Send is called.
+					// AND since our botSendFixed is async, the http response body might timeout or be closed?
+					// Safer to read into memory (bytes.Buffer) if small, or pipe?
+					// Stickers are small. Let's read to memory.
+
+					// Simple read to memory
+					data, errRead := io.ReadAll(rc)
+					rc.Close()
+
+					if errRead == nil {
+						media := h.mediaFromReader(what, bytes.NewReader(data), "media")
+						if media != nil {
+							h.botSendFixed(ToTelebotChat(p.ID()), media, options, receiverBotIdx)
+							continue
+						}
+					}
+				}
+
+				// Fallback: Send using URL via receiver's bot (might fail with "wrong type of web page content")
 				media := h.mediaFromUrl(what, mediaURL)
 				if media != nil {
 					h.botSendFixed(ToTelebotChat(p.ID()), media, options, receiverBotIdx)

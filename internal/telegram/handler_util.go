@@ -3,6 +3,8 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -787,6 +789,34 @@ func (h *Handler) mediaFromUrl(what interface{}, url string) interface{} {
 		return &telebot.Animation{File: telebot.FromURL(url), Caption: v.Caption}
 	case *telebot.Sticker:
 		return &telebot.Sticker{File: telebot.FromURL(url)}
+	default:
+		return nil
+	}
+}
+
+func (h *Handler) downloadFile(url string) (io.ReadCloser, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("failed to download file: %s", resp.Status)
+	}
+	return resp.Body, nil
+}
+
+func (h *Handler) mediaFromReader(what interface{}, reader io.Reader, name string) interface{} {
+	file := telebot.FromReader(reader)
+	switch v := what.(type) {
+	case *telebot.Photo:
+		return &telebot.Photo{File: file, Caption: v.Caption}
+	case *telebot.Video:
+		return &telebot.Video{File: file, Caption: v.Caption}
+	case *telebot.Animation:
+		return &telebot.Animation{File: file, Caption: v.Caption}
+	case *telebot.Sticker:
+		return &telebot.Sticker{File: file}
 	default:
 		return nil
 	}
