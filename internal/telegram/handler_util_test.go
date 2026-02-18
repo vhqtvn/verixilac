@@ -54,3 +54,62 @@ func TestRetryAfterRegex(t *testing.T) {
 		})
 	}
 }
+
+func TestButtonsEqual(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b []InlineButton
+		want bool
+	}{
+		{
+			name: "Both nil",
+			a:    nil,
+			b:    nil,
+			want: true,
+		},
+		{
+			name: "Both empty",
+			a:    []InlineButton{},
+			b:    []InlineButton{},
+			want: true,
+		},
+		{
+			name: "One empty",
+			a:    []InlineButton{{Text: "A", Data: "A"}},
+			b:    []InlineButton{},
+			want: false,
+		},
+		{
+			name: "Same buttons",
+			a:    []InlineButton{{Text: "A", Data: "A", Row: 0}},
+			b:    []InlineButton{{Text: "A", Data: "A", Row: 0}},
+			want: true,
+		},
+		{
+			name: "Different text",
+			a:    []InlineButton{{Text: "A", Data: "A"}},
+			b:    []InlineButton{{Text: "B", Data: "A"}},
+			want: false,
+		},
+		{
+			name: "Different data",
+			a:    []InlineButton{{Text: "A", Data: "A"}},
+			b:    []InlineButton{{Text: "A", Data: "B"}},
+			want: false,
+		},
+		{
+			name: "Different row",
+			a:    []InlineButton{{Text: "A", Data: "A", Row: 0}},
+			b:    []InlineButton{{Text: "A", Data: "A", Row: 1}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+if got := ButtonsEqual(tt.a, tt.b); got != tt.want {
+				t.Errorf("ButtonsEqual() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

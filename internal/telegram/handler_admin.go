@@ -36,36 +36,36 @@ func (h *Handler) CmdAdmin(m *telebot.Message) {
 
 func (h *Handler) doAdminPause(m *telebot.Message) {
 	if err := h.game.Pause(h.ctx(m)); err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, game.EscapeMarkdownV2(stringer.Capitalize(err.Error())))
 		return
 	}
-	h.broadcast(h.game.Players(), "‼️ Sẽ được cập nhật, không thể tạo ván mới!", false)
+	h.broadcast(h.game.Players(), "‼️ Sẽ được cập nhật, không thể tạo ván mới\\!", false)
 }
 
 func (h *Handler) doAdminResume(m *telebot.Message) {
 	if err := h.game.Resume(h.ctx(m)); err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, game.EscapeMarkdownV2(stringer.Capitalize(err.Error())))
 		return
 	}
-	h.broadcast(h.game.Players(), "✅ Server đã mở lại, chơi ngay!", false)
+	h.broadcast(h.game.Players(), "✅ Server đã mở lại, chơi ngay\\!", false)
 }
 
 func (h *Handler) doDeposit(m *telebot.Message, operator *game.Player, ss []string) {
 	if len(ss) != 2 {
-		h.sendMessage(m.Chat, "Cú pháp: /deposit player_id amount")
+		h.sendMessage(m.Chat, "Cú pháp: /deposit player\\_id amount")
 		return
 	}
 
 	id := ss[0]
 	amount, err := strconv.ParseInt(ss[1], 10, 64)
 	if err != nil {
-		h.sendMessage(m.Chat, "Cú pháp: /deposit player_id amount")
+		h.sendMessage(m.Chat, "Cú pháp: /deposit player\\_id amount")
 		return
 	}
 
 	p, err := h.game.Deposit(h.ctx(m), id, amount)
 	if err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, game.EscapeMarkdownV2(stringer.Capitalize(err.Error())))
 		return
 	}
 
@@ -75,9 +75,9 @@ func (h *Handler) doDeposit(m *telebot.Message, operator *game.Player, ss []stri
 		Str("recipient_id", p.ID()).
 		Int64("amount", amount).Msg("deposit")
 
-	msg := fmt.Sprintf("💰%s đã bơm vào %d🌷.", p.Name(), amount)
+	msg := fmt.Sprintf("💰%s đã bơm vào %d🌷\\.", game.EscapeMarkdownV2(p.Name()), amount)
 	if amount < 0 {
-		msg = fmt.Sprintf("💸 %s đã rút ra %d🌷.", p.Name(), -amount)
+		msg = fmt.Sprintf("💸 %s đã rút ra %d🌷\\.", game.EscapeMarkdownV2(p.Name()), -amount)
 	}
 	h.broadcast(h.game.Players(), msg, false)
 }

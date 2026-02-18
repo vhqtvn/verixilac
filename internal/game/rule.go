@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/psucodervn/verixilac/internal/stringer"
 )
 
 type Rule struct {
@@ -57,8 +59,9 @@ func init() {
 	var bf strings.Builder
 	bf.WriteString(`Danh sách rules:`)
 	for _, id := range SortedRuleIDs {
-		bf.WriteString(fmt.Sprintf("\n\n - Rule: %s, ID: %s", DefaultRules[id].Name, id))
-		bf.WriteString(fmt.Sprintf("\n%s", DefaultRules[id].Description))
+		r := DefaultRules[id]
+		bf.WriteString(fmt.Sprintf("\n\n \\- Rule: %s, ID: %s", stringer.EscapeMarkdownV2(r.Name), stringer.EscapeMarkdownV2(id)))
+		bf.WriteString(fmt.Sprintf("\n%s", stringer.EscapeMarkdownV2(r.Description)))
 	}
 	RuleListText = bf.String()
 }

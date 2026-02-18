@@ -149,61 +149,91 @@ func (g *Game) PlayerBet(p *Player, betAmount uint64) (*PlayerInGame, error) {
 	return pg, nil
 }
 
-func (g *Game) PreparingBoard() string {
+func (g *Game) PreparingBoardMarkdownV2() string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	bf := bytes.NewBuffer(nil)
 	r := g.Rule()
 	bf.WriteString("🎲 *Sòng Xì Lác* 🎲\n\n")
-	bf.WriteString(fmt.Sprintf("👑 *Nhà cái*: %s (Rule: %s)\n", EscapeMarkdown(g.dealer.IconName()), EscapeMarkdown(r.Name)))
-	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d🌷):", len(g.players), g.totalBetAmount()))
+	bf.WriteString(fmt.Sprintf("👑 *Nhà cái*: %s \\(Rule: %s\\)\n", EscapeMarkdownV2(g.dealer.IconName()), EscapeMarkdownV2(r.Name)))
+	bf.WriteString(fmt.Sprintf("👥 *Người chơi* \\(%d \\- %s🌷\\):", len(g.players), EscapeMarkdownV2(fmt.Sprintf("%d", g.totalBetAmount()))))
 	if len(g.players) == 0 {
-		bf.WriteString("\n_(chưa có ai)_")
+		bf.WriteString("\n_\\(chưa có ai\\)_")
 	} else {
 		for _, p := range g.players {
-			bf.WriteString(fmt.Sprintf("\n  • %s: %d🌷", EscapeMarkdown(p.IconName()), p.BetAmount()))
+			bf.WriteString(fmt.Sprintf("\n  • %s: %s🌷", EscapeMarkdownV2(p.IconName()), EscapeMarkdownV2(fmt.Sprintf("%d", p.BetAmount()))))
 		}
 	}
+
+	if lastGamePlayers := g.room.LastGamePlayers(); len(lastGamePlayers) > 0 {
+		currentInGame := make(map[string]bool)
+		currentInGame[g.dealer.ID()] = true
+		for _, p := range g.players {
+			currentInGame[p.ID()] = true
+		}
+
+		var notJoined []*Player
+		roomPlayers := g.room.Players()
+		for _, id := range lastGamePlayers {
+			if !currentInGame[id] {
+				// verify still in room
+				for _, rp := range roomPlayers {
+					if rp.ID() == id {
+						notJoined = append(notJoined, rp)
+						break
+					}
+				}
+			}
+		}
+
+		if len(notJoined) > 0 {
+			bf.WriteString("\n\n> ⏳ *Chưa vào*:")
+			for _, p := range notJoined {
+				bf.WriteString(fmt.Sprintf("\n>  • %s", EscapeMarkdownV2(p.IconName())))
+			}
+		}
+	}
+
 	return bf.String()
 }
 
-func (g *Game) CurrentBoard() string {
+func (g *Game) CurrentBoardMarkdownV2() string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	bf := bytes.NewBuffer(nil)
 	bf.WriteString(fmt.Sprintf("👑 *Nhà cái*: %s\n", g.dealer.CardsString()))
-	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d🌷):", len(g.players), g.totalBetAmount()))
+	bf.WriteString(fmt.Sprintf("👥 *Người chơi* \\(%d \\- %s🌷\\):", len(g.players), EscapeMarkdownV2(fmt.Sprintf("%d", g.totalBetAmount()))))
 	if len(g.players) == 0 {
-		bf.WriteString("\n_(chưa có ai)_")
+		bf.WriteString("\n_\\(chưa có ai\\)_")
 	} else {
 		for _, p := range g.players {
-			bf.WriteString(fmt.Sprintf("\n  • %s: %s", EscapeMarkdown(p.IconName()), p.CardsString()))
+			bf.WriteString(fmt.Sprintf("\n  • %s: %s", EscapeMarkdownV2(p.IconName()), p.CardsString()))
 		}
 	}
 	return bf.String()
 }
 
-func (g *Game) PlayerBoard() string {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-	bf := bytes.NewBuffer(nil)
-	for _, p := range g.players {
-		bf.WriteString(fmt.Sprintf(" - %s: %s\n", p.IconName(), p.CardsString()))
-	}
-	return bf.String()
-}
+// func (g *Game) PlayerBoardMarkdownV2() string {
+// 	g.mu.RLock()
+// 	defer g.mu.RUnlock()
+// 	bf := bytes.NewBuffer(nil)
+// 	for _, p := range g.players {
+// 		bf.WriteString(fmt.Sprintf(" \\- %s: %s\n", p.IconName(), p.CardsString()))
+// 	}
+// 	return bf.String()
+// }
 
-func (g *Game) ResultBoard() string {
+func (g *Game) ResultBoardMarkdownV2() string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	bf := bytes.NewBuffer(nil)
 	bf.WriteString(fmt.Sprintf("👑 *Nhà cái*: %s\n", g.dealer.Cards().String(false, true)))
-	bf.WriteString(fmt.Sprintf("👥 *Người chơi* (%d - %d🌷):", len(g.players), g.totalBetAmount()))
+	bf.WriteString(fmt.Sprintf("👥 *Người chơi* \\(%d \\- %s🌷\\):", len(g.players), EscapeMarkdownV2(fmt.Sprintf("%d", g.totalBetAmount()))))
 	for _, p := range g.players {
-		bf.WriteString(fmt.Sprintf("\n  • %s: %s", EscapeMarkdown(p.IconName()), p.Cards().String(false, false)))
+		bf.WriteString(fmt.Sprintf("\n  • %s: %s", EscapeMarkdownV2(p.IconName()), p.Cards().String(false, false)))
 	}
 
 	bf.WriteString("\n\n💰 *TIỀN THƯỞNG* 💰\n\n")
@@ -216,7 +246,7 @@ func (g *Game) ResultBoard() string {
 	} else if dReward < 0 {
 		dIcon = "🔻"
 	}
-	bf.WriteString(fmt.Sprintf("%s *Nhà cái* (%s): %+d🌷 (Bal: %d🌷)\n", dIcon, EscapeMarkdown(g.dealer.IconName()), dReward, g.dealer.Balance()))
+	bf.WriteString(fmt.Sprintf("%s *Nhà cái* \\(%s\\): %s🌷 \\(Bal: %s🌷\\)\n", dIcon, EscapeMarkdownV2(g.dealer.IconName()), EscapeMarkdownV2(fmt.Sprintf("%+d", dReward)), EscapeMarkdownV2(fmt.Sprintf("%d", g.dealer.Balance()))))
 
 	bf.WriteString("*Người chơi*:")
 	for _, p := range g.players {
@@ -227,7 +257,7 @@ func (g *Game) ResultBoard() string {
 		} else if pReward < 0 {
 			pIcon = "🔻"
 		}
-		bf.WriteString(fmt.Sprintf("\n  %s %s: %+d🌷 (Bal: %d🌷)", pIcon, EscapeMarkdown(p.IconName()), pReward, p.Balance()))
+		bf.WriteString(fmt.Sprintf("\n  %s %s: %s🌷 \\(Bal: %s🌷\\)", pIcon, EscapeMarkdownV2(p.IconName()), EscapeMarkdownV2(fmt.Sprintf("%+d", pReward)), EscapeMarkdownV2(fmt.Sprintf("%d", p.Balance()))))
 	}
 	return bf.String()
 }

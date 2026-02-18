@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/psucodervn/verixilac/internal/stringer"
 )
 
 type (
@@ -173,12 +175,12 @@ func (d *Data) GetPairwise(p1, p2 string) *PairwiseStat {
 // This is a basic implementation, can be improved for better Telegram display
 func (p *PlayerStats) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("📊 Thống kê: %s\n", p.PlayerID)) // Name should be resolved by caller if possible, or we store name
+	sb.WriteString(fmt.Sprintf("📊 Thống kê: %s\n", stringer.EscapeMarkdownV2(p.PlayerID))) // Name should be resolved by caller if possible, or we store name
 
-	sb.WriteString("\n🅰️ Vai trò CÁI (Banker):\n")
+	sb.WriteString("\n🅰️ Vai trò CÁI \\(Banker\\):\n")
 	sb.WriteString(p.Banker.String())
 
-	sb.WriteString("\n🅱️ Vai trò CON (Player):\n")
+	sb.WriteString("\n🅱️ Vai trò CON \\(Player\\):\n")
 	sb.WriteString(p.Player.String())
 
 	return sb.String()
@@ -190,9 +192,9 @@ func (r *RoleStats) String() string {
 	if r.TotalGames > 0 {
 		winRate = float64(r.Wins) / float64(r.TotalGames) * 100
 	}
-	sb.WriteString(fmt.Sprintf("  - Tổng ván: %d (Thắng: %d | Thua: %d | Hoà: %d)\n", r.TotalGames, r.Wins, r.Losses, r.Draws))
-	sb.WriteString(fmt.Sprintf("  - Tổng tiền: %+d🌷\n", r.TotalMoney))
-	sb.WriteString(fmt.Sprintf("  - Tỷ lệ thắng: %.2f%%\n", winRate))
+	sb.WriteString(fmt.Sprintf("  \\- Tổng ván: %d \\(Thắng: %d \\| Thua: %d \\| Hoà: %d\\)\n", r.TotalGames, r.Wins, r.Losses, r.Draws))
+	sb.WriteString(fmt.Sprintf("  \\- Tổng tiền: %s🌷\n", stringer.EscapeMarkdownV2(fmt.Sprintf("%+d", r.TotalMoney))))
+	sb.WriteString(fmt.Sprintf("  \\- Tỷ lệ thắng: %.2f%%\n", winRate))
 
 	// Top interesting stats could go here, e.g. "Xì lác: 5, Ngũ linh: 1"
 	keys := make([]string, 0, len(r.HandTypeStats))
@@ -201,20 +203,20 @@ func (r *RoleStats) String() string {
 	}
 	sort.Strings(keys)
 
-	sb.WriteString("  - Chi tiết bài:\n")
+	sb.WriteString("  \\- Chi tiết bài:\n")
 	hasSpecial := false
 	for _, k := range keys {
 		s := r.HandTypeStats[k]
 		if s.Occurrences > 0 {
-			sb.WriteString(fmt.Sprintf("    + %s: %d (%+d🌷)\n", k, s.Occurrences, s.TotalMoney))
+			sb.WriteString(fmt.Sprintf("    \\+ %s: %d \\(%s🌷\\)\n", k, s.Occurrences, stringer.EscapeMarkdownV2(fmt.Sprintf("%+d", s.TotalMoney))))
 			hasSpecial = true
 		}
 	}
 	if !hasSpecial {
-		sb.WriteString("    (Chưa có)\n")
+		sb.WriteString("    \\(Chưa có\\)\n")
 	}
 
-	sb.WriteString("  - Số lượng lá:\n")
+	sb.WriteString("  \\- Số lượng lá:\n")
 	cardKeys := make([]string, 0, len(r.CardCountStats))
 	for k := range r.CardCountStats {
 		cardKeys = append(cardKeys, k)
@@ -224,12 +226,12 @@ func (r *RoleStats) String() string {
 	for _, k := range cardKeys {
 		s := r.CardCountStats[k]
 		if s.Occurrences > 0 {
-			sb.WriteString(fmt.Sprintf("    + %s lá: %d (%+d🌷)\n", k, s.Occurrences, s.TotalMoney))
+			sb.WriteString(fmt.Sprintf("    \\+ %s lá: %d \\(%s🌷\\)\n", k, s.Occurrences, stringer.EscapeMarkdownV2(fmt.Sprintf("%+d", s.TotalMoney))))
 			hasCards = true
 		}
 	}
 	if !hasCards {
-		sb.WriteString("    (Chưa có)\n")
+		sb.WriteString("    \\(Chưa có\\)\n")
 	}
 
 	return sb.String()
@@ -237,12 +239,12 @@ func (r *RoleStats) String() string {
 
 func (p *PairwiseStat) String(p1Name, p2Name string) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("📊 Đối đầu: %s vs %s\n", p1Name, p2Name))
+	sb.WriteString(fmt.Sprintf("📊 Đối đầu: %s vs %s\n", stringer.EscapeMarkdownV2(p1Name), stringer.EscapeMarkdownV2(p2Name)))
 
-	sb.WriteString(fmt.Sprintf("- Tổng số ván: %d\n", p.TotalGames))
-	sb.WriteString(fmt.Sprintf("- %s thắng: %d\n", p1Name, p.Player1Wins))
-	sb.WriteString(fmt.Sprintf("- %s thắng: %d\n", p2Name, p.Player2Wins))
-	sb.WriteString(fmt.Sprintf("- Hoà: %d\n", p.Draws))
+	sb.WriteString(fmt.Sprintf("\\- Tổng số ván: %d\n", p.TotalGames))
+	sb.WriteString(fmt.Sprintf("\\- %s thắng: %d\n", stringer.EscapeMarkdownV2(p1Name), p.Player1Wins))
+	sb.WriteString(fmt.Sprintf("\\- %s thắng: %d\n", stringer.EscapeMarkdownV2(p2Name), p.Player2Wins))
+	sb.WriteString(fmt.Sprintf("\\- Hoà: %d\n", p.Draws))
 
 	return sb.String()
 }

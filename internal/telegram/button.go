@@ -12,6 +12,18 @@ type InlineButton struct {
 	Row  int
 }
 
+func ButtonsEqual(a, b []InlineButton) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func ToTelebotInlineButtons(bs []InlineButton) [][]telebot.InlineButton {
 	mr := 0
 	for _, b := range bs {
@@ -95,4 +107,36 @@ func MakeNewlyCreatedRoomButtons(r *game.Room) []InlineButton {
 	return []InlineButton{
 		{Text: "Tạo ván mới", Data: "/newgame"},
 	}
+}
+
+func MakeDealerDashboardButtons(g *game.Game, dealer *game.PlayerInGame) []InlineButton {
+	var ar []InlineButton
+	players := g.Players()
+
+	// Reveal buttons (Group 2 per row)
+	currentRow := 0
+	currentCol := 0
+	for _, p := range players {
+		if !p.IsDone() {
+			ar = append(ar, InlineButton{Text: "Mở " + p.Name(), Data: "/compare " + g.ID() + " " + p.ID(), Row: currentRow})
+			currentCol++
+			if currentCol == 2 {
+				currentRow++
+				currentCol = 0
+			}
+		}
+	}
+	if currentCol > 0 {
+		currentRow++
+	}
+
+	// Action buttons (Hit/Stand)
+	if dealer.CanHit() {
+		ar = append(ar, InlineButton{Text: "Rút bài", Data: "/hit " + g.ID(), Row: currentRow})
+	}
+	if dealer.CanStand() {
+		ar = append(ar, InlineButton{Text: "Dằn (Xét tất cả)", Data: "/endgame " + g.ID(), Row: currentRow})
+	}
+
+	return ar
 }

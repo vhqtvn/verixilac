@@ -8,9 +8,10 @@ import (
 )
 
 type Room struct {
-	id          string
-	players     []*Player
-	currentGame *Game
+	id              string
+	players         []*Player
+	currentGame     *Game
+	lastGamePlayers []string
 
 	mu sync.RWMutex
 }
@@ -42,6 +43,18 @@ func (r *Room) SetCurrentGame(g *Game) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.currentGame = g
+}
+
+func (r *Room) SetLastGamePlayers(players []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lastGamePlayers = players
+}
+
+func (r *Room) LastGamePlayers() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.lastGamePlayers
 }
 
 func (r *Room) JoinPlayer(p *Player) error {
@@ -108,10 +121,10 @@ func (r *Room) Info() string {
 	})
 
 	bf := bytes.NewBuffer(nil)
-	bf.WriteString("Phòng hiện tại: " + r.id)
+	bf.WriteString("Phòng hiện tại: " + EscapeMarkdownV2(r.id))
 	bf.WriteString("\nThành viên:\n")
 	for _, p := range ps {
-		bf.WriteString(fmt.Sprintf(" - %s: %+d🌷\n", p.IconName(), p.Balance()))
+		bf.WriteString(fmt.Sprintf(" \\- %s: %s🌷\n", EscapeMarkdownV2(p.IconName()), EscapeMarkdownV2(fmt.Sprintf("%+d", p.Balance()))))
 	}
 	return bf.String()
 }

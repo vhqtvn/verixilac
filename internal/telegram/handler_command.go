@@ -132,7 +132,7 @@ func (h *Handler) Setup() error {
 			if len(p.Icon()) > 0 {
 				icon = p.Icon()
 			}
-			h.sendChat(ps, icon+" "+h.GetUsername(m.Chat)+": "+m.Text)
+			h.sendChatWithOptions(ps, game.EscapeMarkdownV2(icon)+" *"+game.EscapeMarkdownV2(h.GetUsername(m.Chat))+"*:\n> "+strings.ReplaceAll(game.EscapeMarkdownV2(m.Text), "\n", "\n> "), &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2})
 		}
 	})
 
@@ -197,29 +197,29 @@ func (h *Handler) CmdSetRule(m *telebot.Message) {
 	ruleID := strings.TrimSpace(m.Payload)
 	r, ok := game.DefaultRules[ruleID]
 	if !ok {
-		h.sendMessage(m.Chat, "Không tìm thấy rule: "+ruleID)
+		h.sendMessage(m.Chat, "Không tìm thấy rule: "+game.EscapeMarkdownV2(ruleID))
 		return
 	}
 	p.SetRule(ruleID)
 	_ = h.game.SaveToStorage()
-	h.sendMessage(m.Chat, "Đã thay đổi rule của bạn thành: "+r.Name+". Tạo game mới để cảm nhận!")
+	h.sendMessage(m.Chat, "Đã thay đổi rule của bạn thành: "+game.EscapeMarkdownV2(r.Name)+"\\. Tạo game mới để cảm nhận\\!")
 }
 
 func (h *Handler) CmdStatus(m *telebot.Message) {
 	p := h.joinServer(m)
 	r := p.Rule()
 	msg := fmt.Sprintf(`Thông tin của bạn:
-- ID: %s
-- Name: %s
-- Balance: %d🌷
-- Rule: %s (%s)
-`, p.ID(), p.IconName(), p.Balance(), r.ID, r.Name)
+\- ID: %s
+\- Name: %s
+\- Balance: %s🌷
+\- Rule: %s \(%s\)
+`, game.EscapeMarkdownV2(p.ID()), game.EscapeMarkdownV2(p.IconName()), game.EscapeMarkdownV2(fmt.Sprintf("%d", p.Balance())), r.ID, game.EscapeMarkdownV2(r.Name))
 	h.sendMessage(m.Chat, msg)
 }
 
 func (h *Handler) CmdSave(m *telebot.Message) {
 	if err := h.game.SaveToStorage(); err != nil {
-		h.sendMessage(m.Chat, "Save failed: "+err.Error())
+		h.sendMessage(m.Chat, "Save failed: "+game.EscapeMarkdownV2(err.Error()))
 	}
 }
 
@@ -232,7 +232,7 @@ func (h *Handler) CmdNewRoom(m *telebot.Message) {
 	p := h.joinServer(m)
 	_, err := h.game.NewRoom(h.ctx(m), p)
 	if err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, game.EscapeMarkdownV2(stringer.Capitalize(err.Error())))
 		return
 	}
 }
@@ -251,7 +251,7 @@ func (h *Handler) doNewGame(m *telebot.Message, onQuery bool) {
 	}
 	g, err := h.game.NewGame(r, p)
 	if err != nil {
-		h.sendMessage(m.Chat, "Không thể tạo ván mới: "+err.Error())
+		h.sendMessage(m.Chat, "Không thể tạo ván mới: "+game.EscapeMarkdownV2(err.Error()))
 		return
 	}
 
@@ -273,9 +273,9 @@ func (h *Handler) CmdJoinRoom(m *telebot.Message) {
 func (h *Handler) CmdLeaveRoom(m *telebot.Message) {
 	p := h.joinServer(m)
 	if r, err := h.game.LeaveRoom(h.ctx(m), p); err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, game.EscapeMarkdownV2(stringer.Capitalize(err.Error())))
 	} else {
-		h.sendMessage(m.Chat, "Bạn đã rời khỏi phòng "+r.ID())
+		h.sendMessage(m.Chat, "Bạn đã rời khỏi phòng "+game.EscapeMarkdownV2(r.ID()))
 	}
 }
 
@@ -292,14 +292,14 @@ func (h *Handler) CmdRoomInfo(m *telebot.Message) {
 func (h *Handler) CmdListRoom(m *telebot.Message) {
 	rooms, err := h.game.Rooms(h.ctx(m))
 	if err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, game.EscapeMarkdownV2(stringer.Capitalize(err.Error())))
 		return
 	}
 	bf := bytes.NewBuffer(nil)
 	for _, r := range rooms {
-		bf.WriteString(fmt.Sprintf("Phòng %s:\n", r.ID()))
+		bf.WriteString(fmt.Sprintf("Phòng %s:\n", game.EscapeMarkdownV2(r.ID())))
 		for _, p := range r.Players() {
-			bf.WriteString(fmt.Sprintf(" - %s (%+d🌷)\n", p.IconName(), p.Balance()))
+			bf.WriteString(fmt.Sprintf(" \\- %s \\(%s🌷\\)\n", game.EscapeMarkdownV2(p.IconName()), game.EscapeMarkdownV2(fmt.Sprintf("%+d", p.Balance()))))
 		}
 	}
 	h.sendMessage(m.Chat, bf.String())
@@ -314,7 +314,7 @@ func (h *Handler) CmdPass(m *telebot.Message) {
 	}
 	pg, err := h.game.PlayerPass(h.ctx(m), g)
 	if err != nil {
-		h.sendMessage(m.Chat, stringer.Capitalize(err.Error()))
+		h.sendMessage(m.Chat, game.EscapeMarkdownV2(stringer.Capitalize(err.Error())))
 		return
 	}
 	// h.broadcast(g.AllPlayers(), pg.Name() + " đã bị qua lượt", false)
@@ -337,12 +337,12 @@ func (h *Handler) CmdSetIcon(m *telebot.Message) {
 	}
 
 	if count != 1 || !emojiRegex.MatchString(icon) {
-		h.sendMessage(m.Chat, fmt.Sprintf("Cú pháp: /seticon icon. Icon chỉ được phép là 1 ký tự Unicode, bạn đã gửi %d kí tự Unicode (`%s`)", count, icon))
+		h.sendMessage(m.Chat, fmt.Sprintf("Cú pháp: /seticon icon\\. Icon chỉ được phép là 1 ký tự Unicode, bạn đã gửi %d kí tự Unicode \\(`%s`\\)", count, game.EscapeMarkdownV2(icon)))
 		return
 	}
 	p.SetIcon(icon)
 	_ = h.game.SaveToStorage()
-	h.sendMessage(m.Chat, "Đã thay đổi icon của bạn thành: "+icon)
+	h.sendMessage(m.Chat, "Đã thay đổi icon của bạn thành: "+game.EscapeMarkdownV2(icon))
 }
 
 func (h *Handler) CmdStats(m *telebot.Message) {
@@ -364,11 +364,11 @@ func (h *Handler) CmdStats(m *telebot.Message) {
 		p1 := h.findPlayerByName(p1Name)
 		p2 := h.findPlayerByName(p2Name)
 		if p1 == nil {
-			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+p1Name)
+			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+game.EscapeMarkdownV2(p1Name))
 			return
 		}
 		if p2 == nil {
-			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+p2Name)
+			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+game.EscapeMarkdownV2(p2Name))
 			return
 		}
 
@@ -395,7 +395,7 @@ func (h *Handler) CmdStats(m *telebot.Message) {
 	if len(args) > 0 {
 		found := h.findPlayerByName(args)
 		if found == nil {
-			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+args)
+			h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+game.EscapeMarkdownV2(args))
 			return
 		}
 		target = found
@@ -439,7 +439,7 @@ func (h *Handler) CmdTransfer(m *telebot.Message) {
 
 	target := h.findPlayerByName(targetName)
 	if target == nil {
-		h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+targetName)
+		h.sendMessage(m.Chat, "Không tìm thấy người chơi: "+game.EscapeMarkdownV2(targetName))
 		return
 	}
 
@@ -449,7 +449,7 @@ func (h *Handler) CmdTransfer(m *telebot.Message) {
 	}
 
 	if p.Balance() < amount {
-		h.sendMessage(m.Chat, fmt.Sprintf("Số dư không đủ. Bạn có %d🌷, cần chuyển %d🌷", p.Balance(), amount))
+		h.sendMessage(m.Chat, fmt.Sprintf("Số dư không đủ\\. Bạn có %s🌷, cần chuyển %d🌷", game.EscapeMarkdownV2(fmt.Sprintf("%d", p.Balance())), amount))
 		return
 	}
 
@@ -458,21 +458,25 @@ func (h *Handler) CmdTransfer(m *telebot.Message) {
 	_ = h.game.SaveToStorage()
 
 	if r := p.CurrentRoom(); r != nil {
-		msg := fmt.Sprintf("💸 %s đã chuyển %d🌷 cho %s.", p.IconName(), amount, target.IconName())
+		msg := fmt.Sprintf("💸 %s đã chuyển %d🌷 cho %s\\.", game.EscapeMarkdownV2(p.IconName()), amount, game.EscapeMarkdownV2(target.IconName()))
 		h.broadcast(r.Players(), msg, false)
 	} else {
-		h.sendMessage(m.Chat, fmt.Sprintf("Đã chuyển %d🌷 cho %s. Số dư còn lại: %d🌷", amount, target.IconName(), p.Balance()))
+		h.sendMessage(m.Chat, fmt.Sprintf("Đã chuyển %d🌷 cho %s\\. Số dư còn lại: %s🌷", amount, game.EscapeMarkdownV2(target.IconName()), game.EscapeMarkdownV2(fmt.Sprintf("%d", p.Balance()))))
 
 		// Notify target if they have a chat ID (heuristic: ID matches a chat ID? No, players are users not chats primarily, but usually ID is user ID)
 		targetChatID, err := strconv.ParseInt(target.ID(), 10, 64)
 		if err == nil {
-			h.sendMessage(&telebot.Chat{ID: targetChatID}, fmt.Sprintf("Bạn vừa nhận được %d🌷 từ %s.", amount, p.IconName()))
+			h.sendMessage(&telebot.Chat{ID: targetChatID}, fmt.Sprintf("Bạn vừa nhận được %d🌷 từ %s\\.", amount, game.EscapeMarkdownV2(p.IconName())))
 		}
 	}
 }
 
 func (h *Handler) onMedia(m *telebot.Message) {
 	p := h.joinServer(m)
+	senderBotIdx := 0
+	if val, ok := h.userBotMap.Load(m.Chat.ID); ok {
+		senderBotIdx = val.(int)
+	}
 	r := p.CurrentRoom()
 	if r == nil {
 		return
@@ -499,12 +503,12 @@ func (h *Handler) onMedia(m *telebot.Message) {
 	}
 
 	if m.Sticker != nil {
-		h.sendChat(ps, icon+" "+p.Name()+" đã gửi một sticker:")
-		h.sendMedia(ps, m.Sticker, nil)
+		h.sendChatWithOptions(ps, game.EscapeMarkdownV2(icon)+" *"+game.EscapeMarkdownV2(p.Name())+"* đã gửi một sticker:", &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2})
+		h.sendMedia(ps, m.Sticker, nil, senderBotIdx)
 	} else {
-		caption := icon + " " + p.Name()
+		caption := icon + " *" + game.EscapeMarkdownV2(p.Name()) + "*"
 		if m.Caption != "" {
-			caption += ": " + m.Caption
+			caption += ": " + game.EscapeMarkdownV2(m.Caption)
 		}
 
 		switch v := what.(type) {
@@ -516,6 +520,6 @@ func (h *Handler) onMedia(m *telebot.Message) {
 			v.Caption = caption
 		}
 
-		h.sendMedia(ps, what, nil)
+		h.sendMedia(ps, what, &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2}, senderBotIdx)
 	}
 }

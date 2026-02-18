@@ -100,13 +100,13 @@ func (cs Cards) Value() int {
 
 func (cs Cards) String(censor bool, isDealer ...bool) string {
 	if censor {
-		return strings.Repeat("**, ", len(cs)-1) + " ** (" + strconv.Itoa(len(cs)) + " lá)"
+		return strings.Repeat("\\*\\*, ", len(cs)-1) + " \\*\\* \\(" + strconv.Itoa(len(cs)) + " lá\\)"
 	}
 	s := make([]string, len(cs))
 	for i := range cs {
 		s[i] = cs[i].String()
 	}
-	return strings.Join(s, ", ") + " (" + cs.TypeString(isDealer...) + ")"
+	return strings.Join(s, ", ") + " \\(" + cs.TypeString(isDealer...) + "\\)"
 }
 
 func (cs Cards) Type(isDealer ...bool) ResultType {

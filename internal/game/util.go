@@ -4,7 +4,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"strings"
+
+	"github.com/psucodervn/verixilac/internal/stringer"
 )
 
 func generateRoomID() string {
@@ -13,10 +14,9 @@ func generateRoomID() string {
 }
 
 func EscapeMarkdown(text string) string {
-	return strings.NewReplacer(
-		"_", "\\_",
-		"*", "\\*",
-		"[", "\\[",
-		"`", "\\`",
-	).Replace(text)
+	return stringer.EscapeMarkdown(text)
+}
+
+func EscapeMarkdownV2(text string) string {
+	return stringer.EscapeMarkdownV2(text)
 }

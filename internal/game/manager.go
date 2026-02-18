@@ -387,6 +387,13 @@ func (m *Manager) FinishGame(ctx context.Context, g *Game, force bool) error {
 	r := g.Room()
 	r.SetCurrentGame(nil)
 
+	// Save last game players
+	lastPlayers := make([]string, 0, len(g.Players())+1)
+	for _, p := range g.AllPlayers() {
+		lastPlayers = append(lastPlayers, p.ID())
+	}
+	r.SetLastGamePlayers(lastPlayers)
+
 	m.mu.RLock()
 	f := m.onGameFinishFunc
 	m.mu.RUnlock()

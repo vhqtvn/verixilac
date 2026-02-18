@@ -97,14 +97,14 @@ func (h *Handler) notifySwitchBots(chatID int64, currentBotIndex int) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("⚠️ Bot đang bị giới hạn tốc độ. Vui lòng chuyển sang các bot sau để tiếp tục:\n")
+	sb.WriteString("⚠️ Bot đang bị giới hạn tốc độ\\. Vui lòng chuyển sang các bot sau để tiếp tục:\n")
 
 	count := 0
 	for i, username := range h.botUsernames {
 		if i == currentBotIndex {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("- [%s](https://t.me/%s)\n", username, username))
+		sb.WriteString(fmt.Sprintf("\\- [%s](https://t.me/%s)\n", game.EscapeMarkdownV2(username), username))
 		count++
 	}
 
@@ -122,7 +122,7 @@ func (h *Handler) notifySwitchBots(chatID int64, currentBotIndex int) {
 		}
 		// Use a fire-and-forget approach running in a separate goroutine
 		go func(b *telebot.Bot) {
-			_, _ = b.Send(chat, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
+			_, _ = b.Send(chat, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2})
 		}(bot)
 	}
 
@@ -130,7 +130,7 @@ func (h *Handler) notifySwitchBots(chatID int64, currentBotIndex int) {
 	go func() {
 		if currentBotIndex >= 0 && currentBotIndex < len(h.bots) {
 			bot := h.bots[currentBotIndex]
-			_, _ = bot.Send(chat, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
+			_, _ = bot.Send(chat, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2})
 		}
 	}()
 }
@@ -418,7 +418,7 @@ func (h *Handler) ctx(m *telebot.Message) context.Context {
 }
 
 func (h *Handler) sendMessage(chat *telebot.Chat, msg string, buttons ...InlineButton) {
-	options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdown}
+	options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2}
 	if len(buttons) > 0 {
 		options.ReplyMarkup = &telebot.ReplyMarkup{
 			InlineKeyboard: ToTelebotInlineButtons(buttons),
@@ -428,7 +428,7 @@ func (h *Handler) sendMessage(chat *telebot.Chat, msg string, buttons ...InlineB
 }
 
 func (h *Handler) editMessage(m *telebot.Message, msg string, buttons ...InlineButton) {
-	options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdown}
+	options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2}
 	if len(buttons) > 0 {
 		options.ReplyMarkup = &telebot.ReplyMarkup{
 			InlineKeyboard: ToTelebotInlineButtons(buttons),
@@ -473,7 +473,7 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 			defer wg.Done()
 
 			options := &telebot.SendOptions{
-				ParseMode: telebot.ModeMarkdown,
+				ParseMode: telebot.ModeMarkdownV2,
 				ReplyMarkup: &telebot.ReplyMarkup{
 					InlineKeyboard: ToTelebotInlineButtons(buttons),
 				},
@@ -492,22 +492,29 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 
 					var msgToEdit *telebot.Message
 					var botIdx = -1
+					var lastText string
+					var lastButtons []InlineButton
 
 					switch v := pm.(type) {
 					case SentMessage:
 						msgToEdit = v.Message
 						botIdx = v.BotIdx
+						lastText = v.Text
+						lastButtons = v.Buttons
 					case *telebot.Message:
 						msgToEdit = v
 					}
 
 					if msgToEdit != nil {
+						if lastText == msg && ButtonsEqual(lastButtons, buttons) {
+							return
+						}
 						editKey := fmt.Sprintf("game:%s", p.ID())
 						m, err, idx := h.botEditSync(editKey, msgToEdit, msg, options, botIdx)
 						if err != nil {
 							log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 						} else if m != nil {
-							h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+							h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons})
 						}
 					}
 				} else {
@@ -518,7 +525,7 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 					if err != nil {
 						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 					} else if m != nil {
-						h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+						h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons})
 					}
 				}
 			} else {
@@ -530,7 +537,7 @@ func (h *Handler) broadcast(receivers interface{}, msg string, edit bool, button
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 				} else if m != nil {
-					h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+					h.gameMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons})
 				}
 			}
 		}()
@@ -605,7 +612,7 @@ func (h *Handler) broadcastLog(receivers interface{}, msg string) {
 				// Send as new message
 				h.lastMessageType.Store(p.ID(), messageTypeLog)
 
-				options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdown}
+				options := &telebot.SendOptions{ParseMode: telebot.ModeMarkdownV2}
 				m, err, idx := h.botSendSync(ToTelebotChat(p.ID()), msg, options)
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send log failed")
@@ -622,7 +629,7 @@ func (h *Handler) broadcastLog(receivers interface{}, msg string) {
 
 func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, buttons ...InlineButton) {
 	options := &telebot.SendOptions{
-		ParseMode: telebot.ModeMarkdown,
+		ParseMode: telebot.ModeMarkdownV2,
 		ReplyMarkup: &telebot.ReplyMarkup{
 			InlineKeyboard: ToTelebotInlineButtons(buttons),
 		},
@@ -640,22 +647,29 @@ func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, b
 			if edit && ok && pm != nil {
 				var msgToEdit *telebot.Message
 				var botIdx = -1
+				var lastText string
+				var lastButtons []InlineButton
 
 				switch v := pm.(type) {
 				case SentMessage:
 					msgToEdit = v.Message
 					botIdx = v.BotIdx
+					lastText = v.Text
+					lastButtons = v.Buttons
 				case *telebot.Message:
 					msgToEdit = v
 				}
 
 				if msgToEdit != nil {
+					if lastText == msg && ButtonsEqual(lastButtons, buttons) {
+						return
+					}
 					editKey := fmt.Sprintf("deal:%s", p.ID())
 					m, err, idx := h.botEditSync(editKey, msgToEdit, msg, options, botIdx)
 					if err != nil {
 						log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 					} else if m != nil {
-						h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+						h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons})
 					}
 				}
 			} else {
@@ -663,7 +677,7 @@ func (h *Handler) broadcastDeal(players []*game.Player, msg string, edit bool, b
 				if err != nil {
 					log.Err(err).Str("receiver", p.Name()).Str("msg", msg).Msg("send message failed")
 				} else if m != nil {
-					h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx})
+					h.dealMessages.Store(p.ID(), SentMessage{Message: m, BotIdx: idx, Text: msg, Buttons: buttons})
 				}
 			}
 		}()
@@ -714,4 +728,41 @@ func (h *Handler) GetUsername(chat *telebot.Chat) string {
 		name = fmt.Sprintf("%v", chat.ID)
 	}
 	return name
+}
+
+func (h *Handler) getMediaUrl(bot *telebot.Bot, what interface{}) (string, error) {
+	var fileID string
+	switch v := what.(type) {
+	case *telebot.Photo:
+		fileID = v.FileID
+	case *telebot.Video:
+		fileID = v.FileID
+	case *telebot.Animation:
+		fileID = v.FileID
+	case *telebot.Sticker:
+		fileID = v.FileID
+	default:
+		return "", fmt.Errorf("unsupported media type: %T", what)
+	}
+
+	file, err := bot.FileByID(fileID)
+	if err != nil {
+		return "", err
+	}
+	return "https://api.telegram.org/file/bot" + bot.Token + "/" + file.FilePath, nil
+}
+
+func (h *Handler) mediaFromUrl(what interface{}, url string) interface{} {
+	switch v := what.(type) {
+	case *telebot.Photo:
+		return &telebot.Photo{File: telebot.FromURL(url), Caption: v.Caption}
+	case *telebot.Video:
+		return &telebot.Video{File: telebot.FromURL(url), Caption: v.Caption}
+	case *telebot.Animation:
+		return &telebot.Animation{File: telebot.FromURL(url), Caption: v.Caption}
+	case *telebot.Sticker:
+		return &telebot.Sticker{File: telebot.FromURL(url)}
+	default:
+		return nil
+	}
 }

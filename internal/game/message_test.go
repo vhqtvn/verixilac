@@ -22,7 +22,7 @@ func TestMessageFormats(t *testing.T) {
 	g.PlayerBet(p2, 200)
 
 	fmt.Println("--- PreparingBoard ---")
-	fmt.Println(g.PreparingBoard())
+	fmt.Println(g.PreparingBoardMarkdownV2())
 	fmt.Println("----------------------")
 
 	// Deal
@@ -32,13 +32,13 @@ func TestMessageFormats(t *testing.T) {
 	// We can't easily force cards without exporting fields or using unsafe, so we rely on what we get.
 
 	fmt.Println("--- CurrentBoard ---")
-	fmt.Println(g.CurrentBoard())
+	fmt.Println(g.CurrentBoardMarkdownV2())
 	fmt.Println("--------------------")
 
 	// Simulate game end
 	g.status.Store(uint32(Finished))
 
 	fmt.Println("--- ResultBoard ---")
-	fmt.Println(g.ResultBoard())
+	fmt.Println(g.ResultBoardMarkdownV2())
 	fmt.Println("-------------------")
 }
